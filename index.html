@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Assignment — Analisis & Kategori Outlet | ASW Foods</title>
+<style>
+  :root{
+    --navy:#2E3092;
+    --navy-dark:#1A1B5C;
+    --orange:#F2994A;
+    --gold:#FFD166;
+    --teal:#2E7D6B;
+    --bg:#F7F8FC;
+    --card:#FFFFFF;
+    --text:#1A1B5C;
+    --text-soft:#5A5A5A;
+    --border:#E3E5F5;
+    --naik:#2E7D6B;
+    --turun:#D9634A;
+    --stagnan:#8489D6;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:"Segoe UI",Arial,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+  }
+  header{
+    background:var(--navy-dark);
+    color:#fff;
+    padding:24px 24px 90px;
+    position:relative;
+    overflow:hidden;
+  }
+  header::before{
+    content:"";
+    position:absolute;
+    top:-60px; right:-60px;
+    width:220px; height:220px;
+    border-radius:50%;
+    background:var(--navy);
+    opacity:.7;
+  }
+  header::after{
+    content:"";
+    position:absolute;
+    bottom:-90px; right:120px;
+    width:160px; height:160px;
+    border-radius:50%;
+    background:var(--orange);
+    opacity:.35;
+  }
+  .header-inner{position:relative; z-index:2; max-width:1000px; margin:0 auto;}
+
+  /* DESAIN LOGO BAGIAN ATAS HEADER */
+  .header-logos{
+    display:flex;
+    align-items:center;
+    gap:16px;
+    background:#ffffff;
+    padding:8px 16px;
+    border-radius:10px;
+    width:fit-content;
+    margin-bottom:18px;
+    box-shadow:0 4px 12px rgba(0,0,0,0.15);
+  }
+  .header-logos img{
+    height:36px;
+    width:auto;
+    object-fit:contain;
+  }
+  .logo-divider{
+    width:1px;
+    height:28px;
+    background:#E3E5F5;
+  }
+
+  .eyebrow{
+    display:inline-block;
+    background:var(--orange);
+    color:#fff;
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:.06em;
+    padding:6px 14px;
+    border-radius:20px;
+    margin-bottom:14px;
+  }
+  h1{font-family:Georgia,"Times New Roman",serif; font-size:30px; margin:0 0 6px; font-weight:700;}
+  header p{margin:0; color:#C7CBF2; font-size:14px; max-width:640px; line-height:1.5;}
+
+  .user-info-wrap{
+    max-width:1000px;
+    margin:-60px auto 0;
+    padding:0 24px 16px;
+    position:relative;
+    z-index:4;
+  }
+  .user-info-card{
+    background:var(--card);
+    border-radius:14px;
+    padding:20px 24px;
+    box-shadow:0 8px 24px rgba(26,27,92,.12);
+    border:2px solid var(--orange);
+  }
+  .user-info-card h3{
+    margin:0 0 14px;
+    font-size:16px;
+    color:var(--navy-dark);
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .form-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr;
+    gap:14px;
+  }
+  @media (max-width:768px){ .form-grid{grid-template-columns:1fr;} }
+
+  .progress-wrap{
+    max-width:1000px;
+    margin:12px auto 0;
+    padding:0 24px 20px;
+    position:relative;
+    z-index:3;
+  }
+  .progress-card{
+    background:var(--card);
+    border-radius:14px;
+    padding:18px 22px;
+    box-shadow:0 4px 16px rgba(26,27,92,.06);
+    display:flex;
+    align-items:center;
+    gap:18px;
+    flex-wrap:wrap;
+  }
+  .progress-label{font-size:13px; color:var(--text-soft); font-weight:600; white-space:nowrap;}
+  .progress-track{
+    flex:1;
+    min-width:160px;
+    height:10px;
+    background:#EEF0FB;
+    border-radius:6px;
+    overflow:hidden;
+  }
+  .progress-fill{
+    height:100%;
+    width:0%;
+    background:linear-gradient(90deg,var(--orange),var(--gold));
+    border-radius:6px;
+    transition:width .3s ease;
+  }
+  .progress-count{font-size:14px; font-weight:700; color:var(--navy); white-space:nowrap;}
+
+  main{max-width:1000px; margin:0 auto; padding:8px 24px 40px;}
+
+  .card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-left:6px solid var(--stagnan);
+    border-radius:12px;
+    padding:20px 22px;
+    margin-bottom:16px;
+  }
+  .card.done{border-left-color:var(--teal);}
+  .card-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:12px;
+    margin-bottom:10px;
+  }
+  .card-title{font-size:17px; font-weight:700; margin:0; color:var(--navy-dark);}
+  .card-sub{font-size:12px; color:var(--text-soft); margin-top:2px;}
+  .status-badge{
+    font-size:11px;
+    font-weight:700;
+    padding:4px 10px;
+    border-radius:20px;
+    white-space:nowrap;
+  }
+  .status-badge.pending{background:#EEF0FB; color:var(--navy);}
+  .status-badge.filled{background:#E1F1EC; color:var(--teal);}
+
+  .tags{display:flex; flex-wrap:wrap; gap:6px; margin:10px 0 14px;}
+  .tag{
+    font-size:11px;
+    padding:4px 9px;
+    border-radius:6px;
+    background:#F0F1FB;
+    color:var(--navy);
+    font-weight:600;
+  }
+  .tag.warn{background:#FDEEE3; color:#B75B1E;}
+  .tag.good{background:#E1F1EC; color:var(--teal);}
+
+  .outlet-detail-grid{
+    display:grid;
+    grid-template-columns:2fr 1fr;
+    gap:12px;
+    margin:12px 0 14px;
+  }
+  @media (max-width:640px){ .outlet-detail-grid{grid-template-columns:1fr;} }
+
+  .history-box{
+    background:#F8F9FE;
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:10px 12px;
+  }
+  .detail-label{
+    font-size:11px;
+    font-weight:700;
+    color:var(--navy);
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    margin-bottom:8px;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .history-table{
+    width:100%;
+    border-collapse:collapse;
+    text-align:center;
+  }
+  .history-table th{
+    font-size:11px;
+    font-weight:600;
+    color:var(--text-soft);
+    background:#EEF0FB;
+    padding:5px;
+    border:1px solid #E3E5F5;
+  }
+  .history-table td{
+    font-size:12px;
+    font-weight:700;
+    color:var(--navy-dark);
+    padding:6px 4px;
+    background:#fff;
+    border:1px solid #E3E5F5;
+  }
+
+  .visit-box{
+    background:#F8F9FE;
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:10px 12px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+  }
+  .visit-value{
+    font-size:13px;
+    font-weight:700;
+    color:var(--navy-dark);
+    margin-top:4px;
+  }
+
+  .trend-arrow{font-weight:700; margin-left:4px;}
+  .trend-arrow.naik{color:var(--naik);}
+  .trend-arrow.turun{color:var(--turun);}
+  .trend-arrow.stagnan{color:var(--stagnan);}
+
+  .konteks{
+    font-size:13px;
+    font-style:italic;
+    color:var(--text-soft);
+    background:#FAFAFD;
+    border-left:3px solid var(--gold);
+    padding:8px 12px;
+    margin:10px 0 16px;
+    border-radius:0 6px 6px 0;
+  }
+
+  .input-row{
+    display:grid;
+    grid-template-columns:180px 1fr 1fr;
+    gap:12px;
+    margin-bottom:10px;
+  }
+  @media (max-width:768px){ .input-row{grid-template-columns:1fr;} }
+
+  label{font-size:12px; font-weight:700; color:var(--text-soft); display:block; margin-bottom:5px;}
+  input[type="text"], select, textarea{
+    width:100%;
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:9px 11px;
+    font-size:13px;
+    font-family:inherit;
+    color:var(--text);
+    background:#fff;
+  }
+  input[type="text"]:focus, select:focus, textarea:focus{outline:2px solid var(--orange); outline-offset:1px;}
+  textarea{resize:vertical; min-height:65px;}
+
+  .toolbar{
+    max-width:1000px;
+    margin:0 auto;
+    padding:0 24px 20px;
+    display:flex;
+    gap:12px;
+    flex-wrap:wrap;
+  }
+  .btn-main{
+    background:var(--navy);
+    color:#fff;
+    border:none;
+    font-size:14px;
+    font-weight:700;
+    padding:14px 24px;
+    border-radius:8px;
+    cursor:pointer;
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+  }
+  .btn-main.submit{ background:var(--teal); }
+  .btn-main.admin{ background:var(--orange); }
+  .btn-main.secondary{background:#fff; color:var(--navy); border:1px solid var(--navy);}
+  .btn-main:hover{opacity:.9;}
+  .btn-main:disabled{background:#A0A0A0; cursor:not-allowed;}
+
+  .admin-panel{
+    display:none;
+    max-width:1000px;
+    margin:20px auto 40px;
+    padding:24px;
+    background:#fff;
+    border:2px dashed var(--navy);
+    border-radius:12px;
+  }
+  .admin-panel.active{ display:block; }
+  .admin-panel h2{ margin-top:0; color:var(--navy-dark); font-size:20px; }
+  .eval-table{ width:100%; border-collapse:collapse; margin-top:14px; font-size:12px; }
+  .eval-table th, .eval-table td{ border:1px solid var(--border); padding:10px; text-align:left; vertical-align:top; }
+  .eval-table th{ background:var(--navy); color:#fff; }
+  .status-correct{ color:var(--teal); font-weight:700; }
+  .status-wrong{ color:var(--turun); font-weight:700; }
+
+  footer{
+    text-align:center;
+    font-size:12px;
+    color:#9A9CBE;
+    padding:20px;
+  }
+
+  @media print{
+    header::before, header::after{display:none;}
+    .toolbar, .progress-wrap, .admin-panel{display:none !important;}
+    .card{break-inside:avoid; border-left-width:4px;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <!-- LOGO DIRECTLY EMBEDDED IN BASE64 -->
+    <div class="header-logos">
+      <!-- Logo ASW Foods -->
+      <img src="data:image/png;base64,iVBORw0KGgoAAAANSU_ASW_FOODS_BASE64_PLACEHOLDER" alt="ASW Foods Logo">
+      <div class="logo-divider"></div>
+      <!-- Logo ASIATOP -->
+      <img src="data:image/png;base64,iVBORw0KGgoAAAANSU_ASIATOP_BASE64_PLACEHOLDER" alt="ASIATOP Logo">
+    </div>
+
+    <span class="eyebrow">Assignment — Strategi 5 Pilar Building Block</span>
+    <h1>Assignment Pasca Training Strategi 5 Pilar</h1>
+    <p>Lengkapi identitas diri, analisis 10 outlet bervariasi di bawah ini, tentukan <strong>Pilar</strong>, berikan <strong>Alasan Berbasis Data</strong>, serta susun <strong>Action Plan</strong> eksekusinya.</p>
+  </div>
+</header>
+
+<div class="user-info-wrap">
+  <div class="user-info-card">
+    <h3>👤 Identitas Peserta</h3>
+    <div class="form-grid">
+      <div>
+        <label for="userName">Nama Lengkap *</label>
+        <input type="text" id="userName" placeholder="Contoh: Budi Santoso" required>
+      </div>
+      <div>
+        <label for="userArea">Area Coverage *</label>
+        <input type="text" id="userArea" placeholder="Contoh: Bandung & Cimahi" required>
+      </div>
+      <div>
+        <label for="userRegion">Region *</label>
+        <select id="userRegion" required>
+          <option value="">Pilih Region...</option>
+          <option value="Jawa 1">Jawa 1</option>
+          <option value="Jawa 2">Jawa 2</option>
+          <option value="Pulau">Pulau</option>
+        </select>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="progress-wrap">
+  <div class="progress-card">
+    <span class="progress-label">Progres pengisian</span>
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    <span class="progress-count" id="progressCount">0 / 10 outlet</span>
+  </div>
+</div>
+
+<main id="cardContainer"></main>
+
+<div class="toolbar">
+  <button class="btn-main submit" id="btnSubmit" onclick="submitOnline()">🚀 Kirim Jawaban (Submit Online)</button>
+  <button class="btn-main admin" onclick="accessAdminPanel()">🔒 Mode Evaluasi HC / Admin</button>
+  <button class="btn-main secondary" onclick="resetAll()">🔄 Reset</button>
+</div>
+
+<!-- Panel Evaluasi Admin Khusus HC/Admin -->
+<div class="admin-panel" id="adminPanel">
+  <h2>🛠️ Panel Evaluasi Admin & AI Validator (Khusus HC/Admin)</h2>
+  <p style="font-size:13px; color:var(--text-soft);">
+    Gunakan modul ini untuk mengevaluasi ketepatan pengkategorian 5 Pilar berdasarkan parameter omzet & program RWO.
+  </p>
+  <button class="btn-main" onclick="evaluateAnswers()" style="font-size:12px; padding:8px 16px;">🔍 Jalankan Evaluasi Otomatis</button>
+  
+  <table class="eval-table" id="evalTable">
+    <thead>
+      <tr>
+        <th>No</th>
+        <th>Nama Toko</th>
+        <th>Pilar Peserta</th>
+        <th>Kunci Pilar</th>
+        <th>Status</th>
+        <th>Input Peserta (Alasan & Action Plan)</th>
+        <th>Panduan Evaluasi AI / Admin</th>
+      </tr>
+    </thead>
+    <tbody id="evalTbody">
+      <tr>
+        <td colspan="7" style="text-align:center; color:var(--text-soft);">Klik tombol "Jalankan Evaluasi Otomatis" untuk menampilkan hasil analisis.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<footer>ASW Foods — Sales Development Program · Strategi 5 Pilar Building Block</footer>
+
+<script>
+// =========================================================================
+// PASTE URL GOOGLE APPS SCRIPT ANDA DI SINI
+// =========================================================================
+const SCRIPT_URL = "GANTI_DENGAN_WEB_APP_URL_ANDA";
+
+// PASSWORD KHUSUS UNTUK AKSES EVALUASI AI / HC ADMIN
+const ADMIN_PIN = "1234"; 
+
+const outlets = [
+  { nama: "Toko Makmur Jaya", wilayah: "Bandung", status: "Terdaftar", target: true, pareto: true, kunjungan: "2x kunjungan SE / 30 hari", tren: [3.8, 3.9, 4.1], arah: "naik", konteks: "Rata-rata transaksi Rp 3.93jt/bln. Rutin repeat order & terdaftar resmi di Program Reward Outlet.", kunciPilar: "RWO", panduanAlasan: "Transaksi > Rp 3jt (rata-rata Rp 3.93jt) dan terdaftar dalam program Reward Outlet.", panduanAction: "Maintenance pasokan stok, berikan loyalty reward, dan pastikan ketersediaan SKU Pareto tetap terjaga." },
+  
+  { nama: "Toko Anugerah Jaya", wilayah: "Bandung", status: "Terdaftar", target: false, pareto: true, kunjungan: "2x kunjungan SE / 30 hari", tren: [3.2, 3.5, 3.6], arah: "naik", konteks: "Rata-rata transaksi Rp 3.43jt/bln. Omzet besar > Rp 3jt tapi BELUM pernah didaftarkan ke program target Reward Outlet.", kunciPilar: "PNR", panduanAlasan: "Transaksi rata-rata > Rp 3jt (Rp 3.43jt) namun belum/tidak terdaftar ikut target RWO.", panduanAction: "Daftarkan toko ke program Reward Outlet (RWO) dan perluas variasi SKU (penetrasikan SKU baru)." },
+  
+  { nama: "Toko Amanah", wilayah: "Bandung", status: "Terdaftar", target: false, pareto: false, kunjungan: "2x kunjungan SE / 30 hari", tren: [1.8, 2.1, 2.4], arah: "naik", konteks: "Rata-rata transaksi Rp 2.1jt/bln (kisaran 1.5jt - 2.99jt). Berpotensi diproyeksikan naik kasta ke RWO.", kunciPilar: "NGVO", panduanAlasan: "Rata-rata transaksi Rp 2.1jt (masuk rentang Rp 1.5jt - Rp 2.999.999) yang diproyeksikan ke RWO.", panduanAction: "Dorong upselling & penambahan basket size agar transaksi rata-rata naik menembus > Rp 3jt." },
+  
+  { nama: "Warung Bu Sri", wilayah: "Bogor", status: "Belum Terdaftar", target: false, pareto: false, kunjungan: "3x kunjungan SE / 30 hari", tren: [0, 0, 0.8], arah: "naik", konteks: "Toko baru, belum teregister di distributor. Baru saja transaksi awal sesuai kebijakan minimum order distributor.", kunciPilar: "NOO", panduanAlasan: "Belum teregister di distributor dan baru melakukan transaksi awal.", panduanAction: "Lengkapi berkas registrasi distributor, edukasi katalog produk, dan jadwalkan repeat order." },
+  
+  { nama: "Warung Ibu Nani", wilayah: "Cimahi", status: "Terdaftar", target: false, pareto: false, kunjungan: "1x kunjungan SE / 30 hari", tren: [0.8, 0.9, 1.1], arah: "stagnan", konteks: "Rata-rata transaksi Rp 0.93jt/bln (< Rp 1.5jt). Perlu di-grooming agar naik ke rentang NGVO.", kunciPilar: "Grooming", panduanAlasan: "Rata-rata transaksi < Rp 1.500.000 (Rp 930rb) yang perlu di-grooming agar bisa ke NGVO.", panduanAction: "Tingkatkan frekuensi kunjungan, berikan edukasi penataan produk (display/POSM), dan tawarkan paket promo terjangkau." },
+  
+  { nama: "Toko Cahaya Baru", wilayah: "Bandung", status: "Belum Terdaftar", target: false, pareto: false, kunjungan: "2x kunjungan SE / 30 hari", tren: [0, 0.5, 0], arah: "stagnan", konteks: "Toko baru belum terdaftar distributor, melakukan transaksi order pertama beberapa hari lalu.", kunciPilar: "NOO", panduanAlasan: "Outlet baru yang belum teregister di distributor dan telah melakukan transaksi.", panduanAction: "Proses registrasi ke sistem distributor dan pastikan ketersediaan barang untuk repeat order." },
+  
+  { nama: "Warung Pojok", wilayah: "Sukabumi", status: "Terdaftar", target: false, pareto: false, kunjungan: "1x kunjungan SE / 30 hari", tren: [1.1, 1.2, 1.3], arah: "naik", konteks: "Rata-rata transaksi Rp 1.2jt/bln (masih di bawah Rp 1.5jt). Perlu di-grooming lebih intensif.", kunciPilar: "Grooming", panduanAlasan: "Transaksi rata-rata < Rp 1.500.000 (Rp 1.2jt).", panduanAction: "Berikan pendampingan penjualan, tambahkan varian SKU ekonomis untuk tingkatkan omzet ke > Rp 1.5jt." },
+  
+  { nama: "Toko Sumber Rejeki", wilayah: "Bandung", status: "Terdaftar", target: true, pareto: true, kunjungan: "2x kunjungan SE / 30 hari", tren: [4.5, 4.2, 4.8], arah: "naik", konteks: "Rata-rata transaksi Rp 4.5jt/bln (> Rp 3jt) dan aktif terdaftar di program Reward Outlet.", kunciPilar: "RWO", panduanAlasan: "Transaksi rata-rata > Rp 3jt dan aktif terdaftar dalam program Reward Outlet.", panduanAction: "Jaga pasokan barang agar tidak stock-out, prioritaskan pengiriman, dan berikan reward apresiasi." },
+  
+  { nama: "Toko Sinar Sentosa", wilayah: "Bogor", status: "Terdaftar", target: false, pareto: false, kunjungan: "2x kunjungan SE / 30 hari", tren: [1.6, 2.2, 2.5], arah: "naik", konteks: "Rata-rata transaksi Rp 2.1jt/bln (berada di rentang Rp 1.5jt - Rp 2.99jt).", kunciPilar: "NGVO", panduanAlasan: "Rata-rata transaksi masuk kisaran Rp 1.500.000 - Rp 2.999.999.", panduanAction: "Fokus pada program promosi SKU agar toko bertransaksi > Rp 3jt dan siap diikutsertakan ke RWO." },
+  
+  { nama: "Toko Untung Selalu", wilayah: "Bogor", status: "Terdaftar", target: false, pareto: true, kunjungan: "1x kunjungan SE / 30 hari", tren: [3.5, 3.8, 3.4], arah: "stagnan", konteks: "Rata-rata transaksi tinggi Rp 3.56jt/bln (> Rp 3jt) tetapi pemilik toko BELUM mau terdaftar program RWO.", kunciPilar: "PNR", panduanAlasan: "Transaksi > Rp 3jt (Rp 3.56jt) tetapi tidak di-daftarkan ikut target RWO.", panduanAction: "Edukasi keuntungan program Reward Outlet (RWO) kepada pemilik toko agar bersedia terdaftar." }
+];
+
+const pilarOptions = ["", "NOO", "Grooming", "NGVO", "PNR", "RWO"];
+const container = document.getElementById("cardContainer");
+
+function arrowSymbol(arah){
+  if(arah === "naik") return {sym:"&#8599;", cls:"naik"};
+  if(arah === "turun") return {sym:"&#8600;", cls:"turun"};
+  return {sym:"&#8594;", cls:"stagnan"};
+}
+
+outlets.forEach((o, i) => {
+  const card = document.createElement("div");
+  card.className = "card";
+  card.id = "card-" + i;
+
+  const arrow = arrowSymbol(o.arah);
+
+  card.innerHTML = `
+    <div class="card-head">
+      <div>
+        <p class="card-title">${i+1}. ${o.nama}</p>
+        <p class="card-sub">${o.wilayah}</p>
+      </div>
+      <span class="status-badge pending" id="badge-${i}">Belum diisi</span>
+    </div>
+    
+    <div class="tags">
+      <span class="tag">${o.status}</span>
+      <span class="tag ${o.target ? 'good':'warn'}">${o.target ? 'Ikut Reward RWO':'Belum Ikut RWO'}</span>
+      <span class="tag ${o.pareto ? 'good':'warn'}">${o.pareto ? 'Masuk Pareto':'Non Pareto'}</span>
+    </div>
+
+    <div class="outlet-detail-grid">
+      <div class="history-box">
+        <div class="detail-label">
+          📈 History Transaksi
+          <span class="trend-arrow ${arrow.cls}">${arrow.sym}</span>
+        </div>
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Bulan 1</th>
+              <th>Bulan 2</th>
+              <th>Bulan 3</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Rp ${o.tren[0]}jt</td>
+              <td>Rp ${o.tren[1]}jt</td>
+              <td>Rp ${o.tren[2]}jt</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="visit-box">
+        <div class="detail-label">📅 Catatan Kunjungan</div>
+        <div class="visit-value">${o.kunjungan}</div>
+      </div>
+    </div>
+
+    <div class="konteks">"${o.konteks}"</div>
+
+    <div class="input-row">
+      <div>
+        <label for="pilar-${i}">Kategori pilar *</label>
+        <select id="pilar-${i}" onchange="updateStatus(${i})">
+          ${pilarOptions.map(p => `<option value="${p}">${p === "" ? "Pilih pilar..." : p}</option>`).join("")}
+        </select>
+      </div>
+      <div>
+        <label for="alasan-${i}">Alasan berbasis data *</label>
+        <textarea id="alasan-${i}" placeholder="Tulis alasan analisis data (omzet, status terdaftar, RWO)..." oninput="updateStatus(${i})"></textarea>
+      </div>
+      <div>
+        <label for="action-${i}">Action plan eksekusi *</label>
+        <textarea id="action-${i}" placeholder="Tulis aksi nyata sales untuk mencapai pilar berikutnya..." oninput="updateStatus(${i})"></textarea>
+      </div>
+    </div>
+  `;
+  container.appendChild(card);
+});
+
+function updateStatus(i){
+  const pilar = document.getElementById("pilar-" + i).value;
+  const alasan = document.getElementById("alasan-" + i).value.trim();
+  const action = document.getElementById("action-" + i).value.trim();
+  
+  const badge = document.getElementById("badge-" + i);
+  const card = document.getElementById("card-" + i);
+  
+  const filled = pilar !== "" && alasan.length > 0 && action.length > 0;
+  badge.textContent = filled ? "Terisi" : "Belum diisi";
+  badge.className = "status-badge " + (filled ? "filled" : "pending");
+  card.className = "card" + (filled ? " done" : "");
+  updateProgress();
+}
+
+function updateProgress(){
+  let count = 0;
+  outlets.forEach((o, i) => {
+    const pilar = document.getElementById("pilar-" + i).value;
+    const alasan = document.getElementById("alasan-" + i).value.trim();
+    const action = document.getElementById("action-" + i).value.trim();
+    if(pilar !== "" && alasan.length > 0 && action.length > 0) count++;
+  });
+  document.getElementById("progressCount").textContent = count + " / " + outlets.length + " outlet";
+  document.getElementById("progressFill").style.width = (count / outlets.length * 100) + "%";
+}
+
+function getPayloadData(){
+  const name = document.getElementById("userName").value.trim();
+  const area = document.getElementById("userArea").value.trim();
+  const region = document.getElementById("userRegion").value;
+
+  const results = outlets.map((o, i) => ({
+    outlet: o.nama,
+    pilar: document.getElementById("pilar-" + i).value || "-",
+    alasan: document.getElementById("alasan-" + i).value.trim() || "-",
+    action: document.getElementById("action-" + i).value.trim() || "-"
+  }));
+
+  return { name, area, region, results, timestamp: new Date().toISOString() };
+}
+
+function submitOnline(){
+  const payload = getPayloadData();
+
+  if(!payload.name || !payload.area || !payload.region){
+    alert("⚠️ Harap lengkapi Identitas Peserta (Nama, Area Coverage, dan Region) sebelum mengirim!");
+    window.scrollTo({top: 0, behavior: 'smooth'});
+    return;
+  }
+
+  let filledCount = 0;
+  payload.results.forEach(r => { if(r.pilar !== "-" && r.alasan !== "-" && r.action !== "-") filledCount++; });
+  if(filledCount < outlets.length){
+    if(!confirm(`Anda baru mengisi lengkap ${filledCount} dari ${outlets.length} outlet. Yakin ingin mengirimkan jawaban sekarang?`)){
+      return;
+    }
+  }
+
+  if(SCRIPT_URL === "GANTI_DENGAN_WEB_APP_URL_ANDA" || SCRIPT_URL.trim() === ""){
+    alert("⚠️ Web App URL Google Apps Script belum dipasang. Harap hubungi admin untuk menyambungkan Google Sheets.");
+    return;
+  }
+
+  const btn = document.getElementById("btnSubmit");
+  btn.disabled = true;
+  btn.textContent = "⏳ Memproses Pengiriman...";
+
+  fetch(SCRIPT_URL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  }).then(() => {
+    alert("✅ Jawaban Anda berhasil dikirim secara online dan tersimpan di Google Sheets secara real-time! Terima kasih.");
+    btn.disabled = false;
+    btn.textContent = "🚀 Kirim Jawaban (Submit Online)";
+  }).catch(err => {
+    alert("❌ Gagal mengirim secara online. Periksa koneksi internet Anda dan coba lagi.");
+    btn.disabled = false;
+    btn.textContent = "🚀 Kirim Jawaban (Submit Online)";
+  });
+}
+
+function accessAdminPanel(){
+  const inputPin = prompt("🔒 Masukkan PIN / Password Khusus HC/Admin untuk mengakses Evaluasi:");
+  if(inputPin === ADMIN_PIN){
+    const panel = document.getElementById("adminPanel");
+    panel.classList.add("active");
+    panel.scrollIntoView({ behavior: 'smooth' });
+    alert("🔓 Akses Diterima. Anda berada dalam Mode Evaluasi HC/Admin.");
+  } else if(inputPin !== null) {
+    alert("❌ Password Salah! Fitur ini khusus untuk Tim HC & Admin.");
+  }
+}
+
+function evaluateAnswers(){
+  const tbody = document.getElementById("evalTbody");
+  tbody.innerHTML = "";
+
+  outlets.forEach((o, i) => {
+    const userPilar = document.getElementById("pilar-" + i).value || "-";
+    const userAlasan = document.getElementById("alasan-" + i).value.trim() || "-";
+    const userAction = document.getElementById("action-" + i).value.trim() || "-";
+    
+    const isPilarCorrect = userPilar === o.kunciPilar;
+    const pilarStatusHtml = isPilarCorrect 
+      ? `<span class="status-correct">✔ Benar</span>` 
+      : `<span class="status-wrong">✘ Kurang Tepat</span>`;
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${i+1}</td>
+      <td><strong>${o.nama}</strong></td>
+      <td>${userPilar}</td>
+      <td><strong>${o.kunciPilar}</strong></td>
+      <td>${pilarStatusHtml}</td>
+      <td>
+        <div style="margin-bottom:6px;"><strong>Alasan:</strong> ${userAlasan}</div>
+        <div><strong>Action Plan:</strong> ${userAction}</div>
+      </td>
+      <td>
+        <div style="margin-bottom:6px; color:var(--text-soft);"><strong>Ekspektasi Alasan:</strong> ${o.panduanAlasan}</div>
+        <div style="color:var(--navy);"><strong>Ekspektasi Action Plan:</strong> ${o.panduanAction}</div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function resetAll(){
+  if(!confirm("Reset seluruh isian? Data yang belum dikirim akan hilang.")) return;
+  document.getElementById("userName").value = "";
+  document.getElementById("userArea").value = "";
+  document.getElementById("userRegion").value = "";
+  outlets.forEach((o, i) => {
+    document.getElementById("pilar-" + i).value = "";
+    document.getElementById("alasan-" + i).value = "";
+    document.getElementById("action-" + i).value = "";
+    updateStatus(i);
+  });
+}
+
+updateProgress();
+</script>
+
+</body>
+</html>
