@@ -1,0 +1,36 @@
+{
+ "v": 1,
+ "updated": "2026-11-13T07:41:47.536Z",
+ "inbox": {
+  "owner": "trainingasiatop",
+  "repo": "tcinbox",
+  "branch": "main"
+ },
+ "r": {
+  "emp": {
+   "hs": "8vxu1wunu76mweo4t28",
+   "h": "361be9724b086d4d53b0ac191f7c2ea09237178eeac540a8b2b63712ecab4718",
+   "t": {
+    "salt": "XcU9PaUxAzbdJL7MRHGMAQ==",
+    "iv": "07tIo3McUnAkQuro",
+    "ct": "q4w7u/cFvCcDC4/v3loQO3KFp5RkxE4cQUwGFq8pJNAYluE9CvpsUlgl6oShZjt651qXx7RS6uvn4Ae3VPIJ1UeI6fTbFkAkuPjy8YGMu4XhqXN8+meu2ZIMg4nezCTcS5kYCArq3qpR1W7dwg=="
+   }
+  },
+  "mgr": {
+   "hs": "951qti7cvgemweo4t28",
+   "h": "8f4735583e761beca65cbcdd146ccad11813ab3f8da982d2a0d5ac26e68c641a",
+   "t": {
+    "salt": "5ukRNeNUnYFhyE8UaIwhEA==",
+    "iv": "ZR8auARqa/RH2q2Z",
+    "ct": "1PUwMfsCNeHmuxBiYfT9mXd2r8XCN92+CXrgbsQ1VubHP15MV0VxHbxqrlDnpki1tUf8x8tZ9Dytpif3uYxexPVRIeLo/PLA+RRMZ4VxfeRpbai9UZI4D9BwQGU+IzjSUF2dFjFp8gEd+o8YVw=="
+   }
+  },
+  "admin": {
+   "t": {
+    "salt": "LTwfmbUW2JQBp87OEUTd2Q==",
+    "iv": "yGdUEUVETF3ZFsUf",
+    "ct": "MqnktvSKfBtchRaT5BIjzx1b+GrFHfyE65YHHW0VfUviOLn9Rg892bisjkoLYhqIrioRnjzZBXH8uEGVCZdLltsSPTjUZoJHO3VC3Cdy+8F+x/P6AyzdC0Ilp8IJSYQwm0oi75ZqCkR9SHGcMg=="
+   }
+  }
+ }
+}
