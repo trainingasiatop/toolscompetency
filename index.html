@@ -2339,6 +2339,10 @@ body.on-home #btnDemo,body.on-home #btnExport,body.role-emp #btnExport,body.on-h
 .adm-nm{min-width:170px}.adm-nm-n{font-weight:700;font-size:13px;color:#14214f;line-height:1.25}.adm-nm-m{font-size:11px;color:#5b6477}
 .who-box{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}.who-chip{display:inline-flex;align-items:center;gap:5px;background:#e4f3ea;color:#1d6a43;border-radius:99px;padding:3px 10px;font-size:12px}.who-chip span{color:#3f5f4c}.who-chip em{font-style:normal;font-size:10.5px;opacity:.75}.who-chip.bad{background:#fde2dd;color:#a3281b}
 .hero .who-chip{background:rgba(255,255,255,.92)}
+.gate-box{max-width:420px;text-align:center}.gate-box .form-control{text-align:center}
+.save-note{font-size:13.5px;padding:12px 14px;line-height:1.45}.save-note.ok{border-left:4px solid #1d7a4a}.save-note.info,.save-note.err{border-left:4px solid #d4a82f}.save-note.err{border-left-color:#b03a2e}
+.save-note i{font-size:18px;margin-top:1px}
+.save-note{text-align:left}.save-note span{flex:1}
 </style></head>
 <body>
 <div class="topbar"><div class="row-top">
@@ -3666,10 +3670,10 @@ var TDB = (function(){
   function setToken(t){ ls("tc_gh_token",t?t.trim():null); }
   function canWrite(){ return !!token(); }
   function api(path, opt){
-    var c=cfg(); opt=opt||{};
-    var h={"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"}; if(token()) h.Authorization="Bearer "+token();
+    var c=cfg(); opt=opt||{}; var tk=opt.tok!==undefined?opt.tok:token(), owner=opt.owner||c.owner, repo=opt.repo||c.repo;
+    var h={"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"}; if(tk) h.Authorization="Bearer "+tk;
     if(opt.body) h["Content-Type"]="application/json";
-    return fetch("https://api.github.com/repos/"+c.owner+"/"+c.repo+path,{method:opt.method||"GET",headers:h,body:opt.body?JSON.stringify(opt.body):undefined,cache:"no-store"});
+    return fetch("https://api.github.com/repos/"+owner+"/"+repo+path,{method:opt.method||"GET",headers:h,body:opt.body?JSON.stringify(opt.body):undefined,cache:"no-store"});
   }
   var state={data:null,sha:null,loadedAt:null,source:null};
   function utf8b64(s){ return b64(te.encode(s)); }
@@ -3729,9 +3733,10 @@ var TDB = (function(){
   function upsertSelf(db, o, code, opt){
     opt=opt||{};
     var same=db.records.filter(function(r){ return nrm(r.n)===nrm(o.n); });
+    if(opt.id){ var byId=db.records.find(function(r){return r.id===opt.id;}); if(byId){ if(!byId.self) byId.self={code:code,s:o.s,a:o.a||null}; byId.updated=new Date().toISOString(); return {rec:byId,status:"sama"}; } }
     var exact=same.find(function(r){ return r.self&&(r.self.code===code||(selfSig(r.self.s)===selfSig(o.s)&&r.l===o.l)); });
     if(exact){ exact.updated=new Date().toISOString(); return {rec:exact,status:"sama"}; }
-    var rec={id:rid(),n:o.n,p:o.p||"",d:o.d||"",l:o.l||"Staff",doj:opt.doj||"",created:new Date().toISOString(),updated:new Date().toISOString(),self:{code:code,s:o.s,a:o.a||null},mgr:null,ap:null,coach:null};
+    var rec={id:opt.id||rid(),n:o.n,p:o.p||"",d:o.d||"",l:o.l||"Staff",doj:opt.doj||"",created:new Date().toISOString(),updated:new Date().toISOString(),self:{code:code,s:o.s,a:o.a||null},mgr:null,ap:null,coach:null};
     db.records.push(rec);
     return {rec:rec,status:same.length?"dobel":"baru"};
   }
@@ -3757,8 +3762,80 @@ var TDB = (function(){
     var ds=new Blob([unb64(body)]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
     return new Response(ds).text().then(JSON.parse);
   }
+  /* ---- akses karyawan / atasan + kotak masuk ---- */
+  var GATE_DEF={emp:"07ce613c7cdb62b4cef150a1cba779d0dbdeb544fcbab19b769cc834e5664521",mgr:"fc5ba3ac37b3fee5f84cbdaa0a201ba68ca558ece003ba9ed46f7c0f5bfa2ec0"}, GATE_SALT="tc-gate-v1";
+  var pub={cfg:null,loaded:false};
+  function ss(k,v){ try{ if(v===undefined) return sessionStorage.getItem(k); if(v===null) sessionStorage.removeItem(k); else sessionStorage.setItem(k,v); }catch(e){ return null; } }
+  function loadPubCfg(force){
+    if(pub.loaded&&!force) return Promise.resolve(pub.cfg);
+    if(location.protocol==="file:"){ pub.loaded=true; return Promise.resolve(null); }
+    var c=cfg(), p=c.path.replace(/[^\/]+$/,"cfg.json");
+    var rd=token()? api("/contents/"+p+"?ref="+c.branch).then(function(r){ if(!r.ok) return null; return r.json().then(function(j){ pub.sha=j.sha; return JSON.parse(fromB64utf8(j.content)); }); })
+                  : fetch(p+"?t="+Date.now(),{cache:"no-store"}).then(function(r){ return r.ok?r.json():null; });
+    return rd.catch(function(){return null;}).then(function(j){ pub.cfg=j; pub.loaded=true; return j; });
+  }
+  function hashPass(pass,salt){ return pbkdf(pass,salt,120000,"bits").then(hex); }
+  function decWith(pass, blob){ return pbkdf(pass,unb64(blob.salt),100000).then(function(key){ return subtle().decrypt({name:"AES-GCM",iv:unb64(blob.iv)},key,unb64(blob.ct)); }).then(function(pt){ return td.decode(pt); }); }
+  function encWith(pass, text){ var salt=crypto.getRandomValues(new Uint8Array(16)), iv=crypto.getRandomValues(new Uint8Array(12));
+    return pbkdf(pass,salt,100000).then(function(key){ return subtle().encrypt({name:"AES-GCM",iv:iv},key,te.encode(text)); }).then(function(ct){ return {salt:b64(salt),iv:b64(iv),ct:b64(new Uint8Array(ct))}; }); }
+  /* role: "emp" | "mgr". Admin password juga diterima. Resolves {ok, role, tok} */
+  function unlock(role, pass){
+    pass=String(pass||"").trim();
+    return loadPubCfg().then(function(pc){
+      var e=pc&&pc.r&&pc.r[role];
+      var chk=e&&e.h? hashPass(pass,e.hs).then(function(h){return h===e.h;}) : hashPass(pass,GATE_SALT).then(function(h){return h===GATE_DEF[role];});
+      return chk.then(function(ok){ if(ok) return {ok:true,role:role,via:role}; return checkAdmin(pass).then(function(a){ return {ok:a,role:role,via:a?"admin":null}; }); })
+        .then(function(res){ if(!res.ok) return res;
+          var blob=pc&&pc.r&&pc.r[res.via]&&pc.r[res.via].t;
+          var get=blob? decWith(pass,blob).catch(function(){return "";}) : Promise.resolve("");
+          return get.then(function(tok){ ss("tc_gate_"+role,"1"); if(tok){ ss("tc_pub",JSON.stringify({tok:tok,role:role})); } return {ok:true,role:role,tok:!!tok}; }); });
+    });
+  }
+  function isUnlocked(role){ return ss("tc_gate_"+role)==="1"; }
+  function pubTok(){ try{ var o=JSON.parse(ss("tc_pub")||"null"); return o&&o.tok||""; }catch(e){ return ""; } }
+  function pubRole(){ try{ var o=JSON.parse(ss("tc_pub")||"null"); return o&&o.role||""; }catch(e){ return ""; } }
+  function inboxCfg(){ var pc=pub.cfg; if(!pc||!pc.inbox) return null; return {owner:pc.inbox.owner||cfg().owner,repo:pc.inbox.repo,branch:pc.inbox.branch||"main"}; }
+  function canSubmit(){ return !!(pubTok()&&inboxCfg()); }
+  function inboxTok(){ return pubTok()||adminInboxTok(); }
+  var _adminInbox="";
+  function adminInboxTok(){ return _adminInbox; }
+  function setAdminInboxTok(t){ _adminInbox=t||""; }
+  /* simpan satu isian ke kotak masuk; path sama → ditimpa (pakai sha) */
+  function submit(kind, payload, path){
+    var ib=inboxCfg(), tk=pubTok(); if(!ib||!tk) return Promise.reject(new Error("no-inbox"));
+    var now=new Date(), pth=path||("in/"+now.toISOString().slice(0,7)+"/"+now.getTime()+"_"+Math.random().toString(36).slice(2,8)+"_"+kind+".json");
+    var item={kind:kind,role:pubRole(),at:now.toISOString(),p:payload};
+    var o={owner:ib.owner,repo:ib.repo,tok:tk};
+    function put(sha){ return encrypt({records:[],item:item}).then(function(file){ var body={message:"Isian "+kind,content:utf8b64(JSON.stringify(file)),branch:ib.branch}; if(sha) body.sha=sha;
+      return api("/contents/"+pth,Object.assign({method:"PUT",body:body},o)); }); }
+    function shaOf(){ return api("/contents/"+pth+"?ref="+ib.branch,o).then(function(r){ return r.ok?r.json().then(function(j){return j.sha;}):null; }); }
+    return (path?shaOf():Promise.resolve(null)).then(put).then(function(r){
+      if(r.status===409||r.status===422) return shaOf().then(put);
+      return r; }).then(function(r){ if(!r.ok) return r.text().then(function(t){ throw new Error("Gagal ("+r.status+")"); }); return {path:pth}; });
+  }
+  /* baca semua isian di kotak masuk → [{path,sha,item}] urut waktu */
+  function readInbox(tok){
+    var ib=inboxCfg(); tok=tok||inboxTok(); if(!ib||!tok) return Promise.resolve([]);
+    var o={owner:ib.owner,repo:ib.repo,tok:tok};
+    return api("/git/trees/"+ib.branch+"?recursive=1",o).then(function(r){ if(r.status===409||r.status===404) return {tree:[]}; if(!r.ok) throw new Error("kotak masuk "+r.status); return r.json(); })
+      .then(function(t){ var fs=(t.tree||[]).filter(function(x){ return x.type==="blob"&&/^in\/.*\.json$/.test(x.path); });
+        return Promise.all(fs.map(function(f){ return api("/git/blobs/"+f.sha,o).then(function(r){ return r.ok?r.json():null; }).then(function(j){ if(!j) return null;
+          return decrypt(JSON.parse(fromB64utf8(j.content))).then(function(d){ return {path:f.path,sha:f.sha,item:d.item}; }).catch(function(){ return null; }); }); }));
+      }).then(function(a){ return a.filter(Boolean).sort(function(x,y){ return String(x.item.at).localeCompare(String(y.item.at)); }); });
+  }
+  /* terapkan isian yang belum diproses (cek db.done[path]===sha) */
+  function applyInbox(db, items, apply){ db.done=db.done||{}; var n=0;
+    items.forEach(function(it){ if(db.done[it.path]===it.sha) return; try{ apply(db,it.item); db.done[it.path]=it.sha; n++; }catch(e){ if(typeof console!=="undefined") console.warn(e); } });
+    return n; }
+  function writePubCfg(obj){ var c=cfg(); var p=c.path.replace(/[^\/]+$/,"cfg.json");
+    return loadPubCfg(true).then(function(){ var body={message:"Update pengaturan",content:utf8b64(JSON.stringify(obj,null,1)),branch:c.branch}; if(pub.sha) body.sha=pub.sha;
+      return api("/contents/"+p,{method:"PUT",body:body}); }).then(function(r){ if(!r.ok) return r.text().then(function(t){ throw new Error("Gagal menyimpan pengaturan ("+r.status+")"); }); return r.json(); })
+      .then(function(j){ pub.sha=j.content&&j.content.sha; pub.cfg=obj; return obj; }); }
+  function testInbox(tok, ib){ return api("",{owner:ib.owner,repo:ib.repo,tok:tok}).then(function(r){ if(!r.ok) throw new Error("Repo "+ib.owner+"/"+ib.repo+" tidak bisa diakses dengan token ini ("+r.status+")"); return r.json(); })
+      .then(function(j){ if(!(j.permissions&&(j.permissions.push||j.permissions.admin))) throw new Error("Token terbaca, tapi tidak punya izin tulis ke "+j.full_name); return j.full_name; }); }
   return {encrypt:encrypt,decrypt:decrypt,checkAdmin:checkAdmin,cfg:cfg,setCfg:setCfg,token:token,setToken:setToken,canWrite:canWrite,load:load,save:save,testAccess:testAccess,
-    state:state,nrm:nrm,decodeCode:decodeCode,upsertSelf:upsertSelf,findTarget:findTarget,dupGroups:dupGroups,isDup:isDup,packCoach:packCoach,unpackCoach:unpackCoach,rid:rid};
+    state:state,pub:pub,loadPubCfg:loadPubCfg,unlock:unlock,isUnlocked:isUnlocked,pubTok:pubTok,pubRole:pubRole,inboxCfg:inboxCfg,canSubmit:canSubmit,submit:submit,readInbox:readInbox,applyInbox:applyInbox,
+    writePubCfg:writePubCfg,testInbox:testInbox,encWith:encWith,decWith:decWith,hashPass:hashPass,setAdminInboxTok:setAdminInboxTok,adminInboxTok:adminInboxTok,GATE_SALT:GATE_SALT,nrm:nrm,decodeCode:decodeCode,upsertSelf:upsertSelf,findTarget:findTarget,dupGroups:dupGroups,isDup:isDup,packCoach:packCoach,unpackCoach:unpackCoach,rid:rid};
 })();
 if(false) module.exports=TDB;
 
@@ -3793,27 +3870,48 @@ document.addEventListener("click",e=>{const b=e.target.closest("[data-sendpd]");
   const w=window.open(PD_FORM,"_blank");
   copyText(code).then(()=>toast("Kode tersalin. Tempel (Ctrl+V) di formulir lalu klik Kirim.","ok")).catch(()=>toast("Kode gagal tersalin otomatis. Salin manual dari kotak kode, lalu tempel di formulir.","err"));
   if(!w)toast('Popup diblokir. Buka formulir: <a href="'+PD_FORM+'" target="_blank" style="color:#fff;text-decoration:underline">klik di sini</a>',"err");});
+const MSG={
+  okSelf:"<b>Jawabanmu sudah tersimpan. Terima kasih banyak!</b><br>Kode di bawah hanya cadangan, tidak perlu dikirim.",
+  okMgr:"<b>Penilaian sudah tersimpan. Terima kasih!</b><br>Perubahan berikutnya ikut tersimpan otomatis. Kode di bawah hanya cadangan.",
+  okCoach:"<b>Form Coaching sudah tersimpan. Terima kasih!</b><br>Kode di bawah hanya cadangan.",
+  sendSelf:"<b>Jawabanmu belum tersimpan.</b><br>Supaya datamu tercatat, kirim kode di bawah ke PD Officer, cukup klik tombol <b>Kirim ke PD Officer</b>.",
+  sendMgr:"<b>Penilaian belum tersimpan.</b><br>Supaya tercatat, kirim kedua kode di bawah ke PD Officer, cukup klik tombol <b>Kirim ke PD Officer</b>.",
+  sendCoach:"<b>Form Coaching belum tersimpan.</b><br>Unduh Excel-nya, lalu kirim kode di bawah ke PD Officer lewat tombol <b>Kirim ke PD Officer</b>.",
+  fail:" Penyimpanan sedang gagal, jadi pakai cara kirim kode dulu ya."};
+function canSave(){return TDB.canWrite()||TDB.canSubmit();}
+/* pengubah data (dipakai langsung oleh admin, atau saat isian kotak masuk ditarik) */
+const MUT={
+  self(db,p){return TDB.upsertSelf(db,p.o,p.code,{id:p.rid});},
+  mgr(db,p){let rec=TDB.findTarget(db,p.emp.n,p.recId);if(!rec)rec=TDB.upsertSelf(db,p.emp,p.selfCode,{id:p.recId}).rec;const o=p.o||{};
+    rec.mgr={code:p.mc,m:o.m,f:o.f,c:o.c||{},ev:o.ev||{},ma:o.ma||null,at:p.at||nowIso()};rec.ap=p.ac;rec.updated=nowIso();return rec;},
+  coach(db,p){let rec=TDB.findTarget(db,p.n,p.recId);
+    if(!rec){if(p.emp)rec=TDB.upsertSelf(db,p.emp,p.selfCode,{id:p.recId}).rec;else{rec={id:p.recId||TDB.rid(),n:p.D.ident.nama,p:p.D.ident.posisi,d:p.D.ident.dept,l:p.D.ident.level,doj:"",created:nowIso(),updated:nowIso(),self:null,mgr:null,ap:null,coach:null};db.records.push(rec);}}
+    rec.coach=JSON.parse(JSON.stringify(p.D));if(p.doj&&!rec.doj)rec.doj=p.doj;rec.updated=nowIso();return rec;}};
+function applyItem(db,it){if(MUT[it.kind])MUT[it.kind](db,it.p);}
+window.tcApplyItem=applyItem;
+function inPath(kind){const n=new Date();return"in/"+n.toISOString().slice(0,7)+"/"+n.getTime()+"_"+Math.random().toString(36).slice(2,8)+"_"+kind+".json";}
+function persist(kind,p,msg,path){if(TDB.canWrite())return TDB.save(db=>{const r=MUT[kind](db,p);if(r&&r.rec)S.recId=r.rec.id;else if(r&&r.id)S.recId=r.id;},msg);
+  if(TDB.canSubmit())return TDB.submit(kind,p,path);return Promise.reject(new Error("none"));}
+function empPayload(){return{n:S.emp.name,p:S.emp.position,d:S.emp.department,l:S.emp.level,s:S.selfScores,a:encAns(S.selfAnswers)};}
 document.getElementById("btnSelfDone").addEventListener("click",()=>{setTimeout(selfDoneSave,0);});
 function selfDoneSave(){
   if(S.demo){setNote("#selfSaveNote","info","Contoh pengisian tidak disimpan.");return;}
-  if(!TDB.canWrite()){setNote("#selfSaveNote","info","Klik Kirim ke PD Officer, atau salin kode di bawah dan sampaikan ke PD Officer. Kode ini juga menjadi cadangan datamu.");return;}
-  const code=$("#shareCode").textContent.trim(),o=decodeObj(code);if(!o)return;
-  setNote("#selfSaveNote","busy","Menyimpan…");
-  TDB.save(db=>{const r=TDB.upsertSelf(db,o,code);S.recId=r.rec.id;SAVE.selfStatus=r.status;},"Self assessment: "+o.n)
-    .then(()=>setNote("#selfSaveNote","ok",SAVE.selfStatus==="dobel"?"Data tersimpan. Catatan: nama ini sudah pernah mengisi, PD Officer bisa mengecek data dobelnya.":"Data tersimpan. Kode di bawah hanya cadangan."))
-    .catch(e=>{console.warn(e);setNote("#selfSaveNote","err","Belum tersimpan. Klik Kirim ke PD Officer atau salin kode di bawah sebagai cadangan.");});
+  if(!canSave()){setNote("#selfSaveNote","info",MSG.sendSelf);return;}
+  const code=$("#shareCode").textContent.trim(),o=decodeObj(code);if(!o)return;S.recId=S.recId||TDB.rid();
+  setNote("#selfSaveNote","busy","Menyimpan jawabanmu…");
+  persist("self",{o,code,rid:S.recId},"Self assessment: "+o.n)
+    .then(()=>{setNote("#selfSaveNote","ok",MSG.okSelf);toast("Jawabanmu sudah tersimpan. Terima kasih!","ok");})
+    .catch(e=>{console.warn(e);setNote("#selfSaveNote","err",MSG.sendSelf+MSG.fail);});
 }
 function scheduleMgrSave(){
   if(!S.emp||S.demo||S.role!=="mgr")return;
-  if(!TDB.canWrite()){setNote(".mgr-save-note","info","Klik Kirim ke PD Officer, atau salin kedua kode di bawah dan sampaikan ke PD Officer.");return;}
-  const sig=genAtasanCode()+"|"+genActionCode();if(sig===SAVE.lastMgr){setNote(".mgr-save-note","ok","Data tersimpan"+(SAVE.at?" · "+SAVE.at:"")+".");return;}
-  clearTimeout(SAVE.timer);setNote(".mgr-save-note","busy","Menyimpan perubahan…");
-  SAVE.timer=setTimeout(()=>{const mc=genAtasanCode(),ac=genActionCode(),o=decodeObj(mc);
-    TDB.save(db=>{let rec=TDB.findTarget(db,S.emp.name,S.recId);
-      if(!rec){rec=TDB.upsertSelf(db,{n:S.emp.name,p:S.emp.position,d:S.emp.department,l:S.emp.level,s:S.selfScores,a:encAns(S.selfAnswers)},selfCodeNow()).rec;}
-      S.recId=rec.id;rec.mgr={code:mc,m:o.m,f:o.f,c:o.c,ev:o.ev||{},ma:o.ma||null,at:nowIso()};rec.ap=ac;rec.updated=nowIso();
-    },"Penilaian atasan: "+S.emp.name).then(()=>{SAVE.lastMgr=mc+"|"+ac;SAVE.at=new Date().toTimeString().slice(0,5);setNote(".mgr-save-note","ok","Data tersimpan · "+SAVE.at+". Kode di bawah hanya cadangan.");})
-    .catch(e=>{console.warn(e);setNote(".mgr-save-note","err","Belum tersimpan. Klik Kirim ke PD Officer atau salin kode di bawah sebagai cadangan.");});},1200);
+  if(!canSave()){setNote(".mgr-save-note","info",MSG.sendMgr);return;}
+  const sig=genAtasanCode()+"|"+genActionCode();if(sig===SAVE.lastMgr){setNote(".mgr-save-note","ok",MSG.okMgr+(SAVE.at?" <span class='small'>("+SAVE.at+")</span>":""));return;}
+  clearTimeout(SAVE.timer);setNote(".mgr-save-note","busy","Menyimpan penilaian…");
+  SAVE.timer=setTimeout(()=>{const mc=genAtasanCode(),ac=genActionCode(),o=decodeObj(mc);S.recId=S.recId||TDB.rid();SAVE.mgrPath=SAVE.mgrPath||inPath("mgr");
+    persist("mgr",{emp:empPayload(),selfCode:selfCodeNow(),recId:S.recId,mc,ac,o,at:nowIso()},"Penilaian atasan: "+S.emp.name,SAVE.mgrPath)
+    .then(()=>{const first=!SAVE.lastMgr;SAVE.lastMgr=mc+"|"+ac;SAVE.at=new Date().toTimeString().slice(0,5);setNote(".mgr-save-note","ok",MSG.okMgr+" <span class='small'>("+SAVE.at+")</span>");if(first)toast("Penilaian sudah tersimpan. Terima kasih!","ok");})
+    .catch(e=>{console.warn(e);setNote(".mgr-save-note","err",MSG.sendMgr+MSG.fail);});},1200);
 }
 const _rmc=renderMgrCodes;renderMgrCodes=function(){_rmc();if(!S.emp)return;$$(".mgr-codes .card-panel").forEach(p=>{if(!p.querySelector(".mgr-save-note"))p.insertAdjacentHTML("afterbegin",'<div class="mgr-save-note"></div>');});
   $$(".mgr-codes .card-panel").forEach(p=>{if(!p.querySelector(".btn-to-coach"))p.insertAdjacentHTML("beforeend",'<button class="btn btn-navy btn-sm mt-2 btn-to-coach"><i class="bi bi-clipboard2-check"></i> Lanjut ke Form Coaching</button>');});
@@ -3828,18 +3926,19 @@ function renderPick(){
   const L=$("#pickList"),sel=$("#pickSel");if(!L)return;
   if(PICK.busy){L.innerHTML='<div class="pk-empty"><span class="spinner-border spinner-border-sm"></span> Memuat daftar nama…</div>';return;}
   if(PICK.err){L.innerHTML=`<div class="pk-empty">Daftar nama belum tersedia di perangkat ini. Gunakan <b>Tempel Kode Assessment</b>.</div>`;return;}
-  const recs=(TDB.state.data&&TDB.state.data.records)||[],q=TDB.nrm(PICK.q);
+  const recs=((PICK.view||TDB.state.data)||{}).records||[],q=TDB.nrm(PICK.q);
   const list=recs.filter(r=>!q||TDB.nrm([r.n,r.p,r.d,r.l].join(" ")).includes(q)).sort((a,b)=>String(b.updated).localeCompare(String(a.updated)));
   L.innerHTML=list.length?list.map(r=>`<button class="pk-item ${PICK.sel===r.id?"active":""}" data-pk="${r.id}"><div class="pk-n">${H(r.n)}</div><div class="pk-m">${H(r.p)} · ${H(r.d)} · ${H(r.l)}</div><div class="pk-bs">${badgeRow(r,recs)}</div></button>`).join(""):`<div class="pk-empty">${recs.length?"Tidak ada nama yang cocok.":"Belum ada data di database."}</div>`;
   const r=recs.find(x=>x.id===PICK.sel);
   sel.innerHTML=r?`<div class="pk-sel"><div><div class="pk-n">${H(r.n)}</div><div class="pk-m">${H(r.p)} · ${H(r.d)} · ${H(r.l)} · diisi ${fmtD(String(r.created).slice(0,10))}</div>${TDB.isDup(recs,r)?'<div class="pk-warn"><i class="bi bi-exclamation-triangle"></i> Nama ini punya lebih dari satu data. Pastikan memilih yang benar (cek tanggal isi).</div>':""}</div>
     <div class="d-flex flex-wrap gap-2 mt-2"><button class="btn btn-gold btn-sm" data-pka="mgr"><i class="bi bi-person-badge"></i> ${r.mgr?"Nilai Ulang (Manager Assessment)":"Mulai Manager Assessment"}</button>${r.mgr?'<button class="btn btn-light btn-sm" data-pka="res"><i class="bi bi-list-check"></i> Lihat Hasil &amp; Action Plan</button>':""}<button class="btn btn-light btn-sm" data-pka="coach"><i class="bi bi-clipboard2-check"></i> Form Coaching</button></div></div>`:"";
 }
-function loadPick(force){PICK.busy=true;PICK.err=null;renderPick();TDB.load(force).then(()=>{PICK.busy=false;PICK.loaded=true;renderPick();}).catch(e=>{PICK.busy=false;PICK.err=e.message;renderPick();});}
+function mergedView(force){return TDB.load(force).then(db=>TDB.loadPubCfg().then(()=>TDB.readInbox().catch(()=>[])).then(items=>{const v=JSON.parse(JSON.stringify(db));v.records=v.records||[];TDB.applyInbox(v,items,applyItem);PICK.view=v;return v;}));}
+function loadPick(force){PICK.busy=true;PICK.err=null;renderPick();mergedView(force).then(()=>{PICK.busy=false;PICK.loaded=true;renderPick();}).catch(e=>{PICK.busy=false;PICK.err=e.message;renderPick();});}
 document.addEventListener("click",e=>{
   const mm=e.target.closest("[data-mm]");if(mm){$$("[data-mm]").forEach(b=>b.classList.toggle("active",b===mm));$("#mmPick").style.display=mm.dataset.mm==="pick"?"":"none";$("#mmPaste").style.display=mm.dataset.mm==="paste"?"":"none";if(mm.dataset.mm==="pick"&&!PICK.loaded)loadPick();return;}
   const pk=e.target.closest("[data-pk]");if(pk){PICK.sel=pk.dataset.pk;renderPick();return;}
-  const a=e.target.closest("[data-pka]");if(a){const rec=(TDB.state.data.records||[]).find(x=>x.id===PICK.sel);if(!rec)return;
+  const a=e.target.closest("[data-pka]");if(a){const rec=(((PICK.view||TDB.state.data)||{}).records||[]).find(x=>x.id===PICK.sel);if(!rec)return;
     if(a.dataset.pka==="mgr")startMgrFromRec(rec);else if(a.dataset.pka==="res")openResultsFromRec(rec);else if(a.dataset.pka==="coach"){empFromRec(rec);openCoach(rec);}}
 });
 document.addEventListener("input",e=>{if(e.target.id==="pickSearch"){PICK.q=e.target.value;renderPick();}});
@@ -4011,13 +4110,11 @@ function exportCoach(){const D=S.coach;toast('<span class="spinner-border spinne
 window.tcExportCoach=exportCoach;
 function saveCoach(){const D=S.coach;const note=$("#cfSaveNote");
   const showCode=(msg,kind)=>TDB.packCoach({n:D.ident.nama,rid:S.recId||null,D:D}).then(code=>{note.innerHTML=saveStatusHTML(kind||"info",msg)+`<div class="small text-muted mt-2">Kode Form Coaching (cadangan) — salin dan sampaikan ke PD Officer:</div><textarea class="form-control form-control-sm mt-1" rows="2" readonly>${code}</textarea><button class="btn btn-sm btn-gold mt-1" data-copy>Salin Kode</button>`+(kind==="ok"?"":pdBtn("coach"));});
-  if(!TDB.canWrite()){showCode("Unduh Excel, lalu klik Kirim ke PD Officer atau salin kode di bawah sebagai cadangan.");return;}
-  note.innerHTML=saveStatusHTML("busy","Menyimpan Form Coaching…");
-  TDB.save(db=>{let rec=TDB.findTarget(db,S.emp?S.emp.name:D.ident.nama,S.recId);
-    if(!rec){if(S.emp&&S.selfScores&&Object.keys(S.selfScores).length)rec=TDB.upsertSelf(db,{n:S.emp.name,p:S.emp.position,d:S.emp.department,l:S.emp.level,s:S.selfScores,a:encAns(S.selfAnswers)},selfCodeNow()).rec;
-      else{rec={id:TDB.rid(),n:D.ident.nama,p:D.ident.posisi,d:D.ident.dept,l:D.ident.level,doj:"",created:nowIso(),updated:nowIso(),self:null,mgr:null,ap:null,coach:null};db.records.push(rec);}}
-    S.recId=rec.id;rec.coach=JSON.parse(JSON.stringify(D));if(CO.doj&&!rec.doj)rec.doj=CO.doj;rec.updated=nowIso();},"Form coaching: "+D.ident.nama)
-  .then(()=>{CO.dirty=false;showCode("Form Coaching tersimpan · "+new Date().toTimeString().slice(0,5)+".","ok");}).catch(e=>{console.warn(e);showCode("Belum tersimpan. Unduh Excel dan simpan kode di bawah sebagai cadangan.","err");});}
+  if(!canSave()){showCode(MSG.sendCoach);return;}
+  note.innerHTML=saveStatusHTML("busy","Menyimpan Form Coaching…");S.recId=S.recId||null;SAVE.coachPath=SAVE.coachPath||inPath("coach");
+  const hasSelf=S.emp&&S.selfScores&&Object.keys(S.selfScores).length;
+  persist("coach",{n:S.emp?S.emp.name:D.ident.nama,recId:S.recId,emp:hasSelf?empPayload():null,selfCode:hasSelf?selfCodeNow():null,D:JSON.parse(JSON.stringify(D)),doj:CO.doj||""},"Form coaching: "+D.ident.nama,SAVE.coachPath)
+  .then(()=>{CO.dirty=false;showCode(MSG.okCoach+" <span class='small'>("+new Date().toTimeString().slice(0,5)+")</span>","ok");toast("Form Coaching sudah tersimpan. Terima kasih!","ok");}).catch(e=>{console.warn(e);showCode(MSG.sendCoach+MSG.fail,"err");});}
 document.addEventListener("click",e=>{
   const t=e.target.closest("[data-cft]");if(t){CO.tab=t.dataset.cft;renderCoach();return;}
   const p=e.target.closest("[data-cfp]");if(p){CO.prevSess=+p.dataset.cfp;renderCoach();return;}
@@ -4042,9 +4139,9 @@ function adminHeader(){const k=ADMIN.tab;return`<div class="card-panel"><div cla
   <div class="d-flex gap-2 mt-3 flex-wrap">${[["D","Database"],["A","Rekap Assessment"],["C","Rekap Competency Improvement"]].map(t=>`<button class="btn btn-sm ${k===t[0]?"btn-navy":"btn-outline-navy"}" data-act="tab" data-t="${t[0]}">${t[1]}</button>`).join("")}</div></div>`;}
 function renderGate(){$("#adminRoot").innerHTML=`<div class="gate-wrap"><div class="card-panel gate"><div class="gate-ic"><i class="bi bi-shield-lock"></i></div><h5 class="section-title">Admin Recap</h5><div class="section-sub">Masukkan password admin untuk membuka database dan rekap.</div>
   <input type="password" class="form-control" id="admPass" placeholder="Password admin" autocomplete="current-password"><div id="admErr" class="small text-danger mt-1"></div><div class="d-flex gap-2 mt-3"><button class="btn btn-navy" data-db="login"><i class="bi bi-unlock"></i> Masuk</button><button class="btn btn-outline-navy" data-act="portal">Kembali</button></div></div></div>`;setTimeout(()=>{const i=$("#admPass");if(i)i.focus();},50);}
-function doLogin(){const v=($("#admPass")||{}).value||"";$("#admErr").textContent="Memeriksa…";TDB.checkAdmin(v).then(ok=>{if(!ok){$("#admErr").textContent="Password salah.";return;}ADMIN.unlocked=true;try{sessionStorage.setItem("tc_admin","1");}catch(e){}ADMIN.tab="D";renderAdmin();loadDB();}).catch(()=>{$("#admErr").textContent="Browser ini tidak mendukung pemeriksaan password (butuh HTTPS).";});}
+function doLogin(){const v=($("#admPass")||{}).value||"";$("#admErr").textContent="Memeriksa…";TDB.checkAdmin(v).then(ok=>{if(!ok){$("#admErr").textContent="Password salah.";return;}ADMIN.unlocked=true;try{sessionStorage.setItem("tc_admin","1");}catch(e){}ADMIN.tab="D";adminInbox(v).then(()=>{renderAdmin();loadDB();});}).catch(()=>{$("#admErr").textContent="Browser ini tidak mendukung pemeriksaan password (butuh HTTPS).";});}
 const DBV={busy:false,err:null,msg:null};
-function loadDB(force){DBV.busy=true;DBV.err=null;if(ADMIN.tab==="D")renderDB();return TDB.load(force).then(()=>{DBV.busy=false;if(ADMIN.tab==="D")renderDB();}).catch(e=>{DBV.busy=false;DBV.err=e.message==="offline"?"Data belum bisa dimuat di perangkat ini.":"Data belum bisa dimuat ("+e.message+").";if(ADMIN.tab==="D")renderDB();});}
+function loadDB(force){DBV.busy=true;DBV.err=null;if(ADMIN.tab==="D")renderDB();return TDB.load(force).then(()=>pullInbox()).then(()=>{DBV.busy=false;if(ADMIN.tab==="D")renderDB();}).catch(e=>{DBV.busy=false;DBV.err=e.message==="offline"?"Data belum bisa dimuat di perangkat ini.":"Data belum bisa dimuat ("+e.message+").";if(ADMIN.tab==="D")renderDB();});}
 function coachCell(r){if(!r.coach)return'<span class="text-muted">–</span>';const out=[1,2].map(s=>{if(!hasC(r.coach,s))return"";const c=CC.compute(r.coach,s);return c.ach===null?"C"+s:`C${s} <b>${(c.ach*100).toFixed(0)}%</b>`;}).filter(Boolean);return out.join("<br>")||"draft";}
 function recById(id){return((TDB.state.data||{}).records||[]).find(x=>x.id===id);}
 function coachFromAdmin(id){const r=recById(id);if(!r)return;const md=$("#detModal");if(md)md.remove();empFromRec(r);S.fromAdmin=true;openCoach(r);}
@@ -4052,7 +4149,7 @@ function mgrFromAdmin(id){const r=recById(id);if(!r)return;const md=$("#detModal
 function settingsModal(){const c=TDB.cfg(),can=TDB.canWrite();let md=$("#setModal");if(!md){md=document.createElement("div");md.id="setModal";md.className="det-modal";document.body.appendChild(md);md.addEventListener("click",ev=>{if(ev.target===md||ev.target.closest("[data-x]"))md.remove();});}
   md.innerHTML=`<div class="det-box"><div class="det-head"><div><div class="eyebrow">PENGATURAN</div><h4>Pengaturan Penyimpanan</h4></div><button class="btn btn-sm btn-outline-navy" data-x>Tutup</button></div><div class="section-sub">Data disimpan sebagai satu file terenkripsi (<code>${H(c.path)}</code>) di repo GitHub <b>${H(c.owner)}/${H(c.repo)}</b>, tanpa server tambahan. Token hanya tersimpan di browser perangkat ini, tidak pernah masuk ke repo.</div>
    <div class="row g-2"><div class="col-md-6"><label class="small-label">Token GitHub (fine-grained, izin Contents: Read and write)</label><input type="password" class="form-control form-control-sm" id="dbToken" placeholder="${can?"Token tersimpan di perangkat ini":"github_pat_…"}"></div><div class="col-md-2"><label class="small-label">Owner</label><input class="form-control form-control-sm" id="dbOwner" value="${H(c.owner)}"></div><div class="col-md-2"><label class="small-label">Repo</label><input class="form-control form-control-sm" id="dbRepo" value="${H(c.repo)}"></div><div class="col-md-2"><label class="small-label">Branch</label><input class="form-control form-control-sm" id="dbBranch" value="${H(c.branch)}"></div></div>
-   <div class="d-flex flex-wrap gap-2 mt-2"><button class="btn btn-navy btn-sm" data-db="saveTok"><i class="bi bi-key"></i> Simpan &amp; Tes Koneksi</button>${can?'<button class="btn btn-outline-danger btn-sm" data-db="clearTok">Hapus token dari perangkat ini</button>':""}</div><div id="dbTokRes" class="small mt-2">${DBV.tok||""}</div></div>`;}
+   <div class="d-flex flex-wrap gap-2 mt-2"><button class="btn btn-navy btn-sm" data-db="saveTok"><i class="bi bi-key"></i> Simpan &amp; Tes Koneksi</button>${can?'<button class="btn btn-outline-danger btn-sm" data-db="clearTok">Hapus token dari perangkat ini</button>':""}</div><div id="dbTokRes" class="small mt-2">${DBV.tok||""}</div>${accessHTML()}</div>`;}
 function renderDB(){
   const root=$("#adminRoot"),data=TDB.state.data,recs=(data&&data.records)||[],dups=TDB.dupGroups(recs),c=TDB.cfg(),can=TDB.canWrite(),f=ADMIN.dbf,q=TDB.nrm(f.q);
   let list=recs.filter(r=>(!q||TDB.nrm([r.n,r.p,r.d,r.l].join(" ")).includes(q))&&(!f.dup||TDB.isDup(recs,r))).sort((a,b)=>TDB.nrm(a.n).localeCompare(TDB.nrm(b.n))||String(a.created).localeCompare(String(b.created)));
@@ -4094,7 +4191,7 @@ function fillFromDB(){TDB.load().then(db=>{const latest={};db.records.forEach(r=
 document.addEventListener("click",e=>{const b=e.target.closest("[data-db]");if(!b)return;const k=b.dataset.db,id=b.dataset.id;
   if(k==="login")doLogin();else if(k==="logout"){ADMIN.unlocked=false;try{sessionStorage.removeItem("tc_admin");}catch(x){}renderAdmin();}
   else if(k==="reload")loadDB(true);else if(k==="dupOnly"){ADMIN.dbf.dup=!ADMIN.dbf.dup;renderDB();}
-  else if(k==="settings")settingsModal();else if(k==="det")dbDetail(id);else if(k==="coach")coachFromAdmin(id);else if(k==="mgrA")mgrFromAdmin(id);else if(k==="fill")fillFromDB();else if(k==="import")runImport();
+  else if(k==="settings")TDB.loadPubCfg(true).then(settingsModal);else if(k==="saveAccess")saveAccess();else if(k==="det")dbDetail(id);else if(k==="coach")coachFromAdmin(id);else if(k==="mgrA")mgrFromAdmin(id);else if(k==="fill")fillFromDB();else if(k==="import")runImport();
   else if(k==="del"){const r=TDB.state.data.records.find(x=>x.id===id);if(!r||!confirm("Hapus data "+r.n+" (diisi "+fmtDT(r.created)+")? Tindakan ini tidak bisa dibatalkan."))return;TDB.save(db=>{db.records=db.records.filter(x=>x.id!==id);},"Hapus data: "+r.n).then(()=>{toast("Data dihapus.","ok");renderDB();}).catch(x=>toast(H(x.message),"err"));}
   else if(k==="backup"){const d=TDB.state.data;if(!d){toast("Database belum dimuat.","err");return;}downloadBlob(new Blob([JSON.stringify(d,null,1)],{type:"application/json"}),"backup-database-kompetensi-"+todayIso()+".json");}
   else if(k==="saveTok"){const t=$("#dbToken").value.trim();TDB.setCfg({owner:$("#dbOwner").value.trim()||"trainingasiatop",repo:$("#dbRepo").value.trim()||"toolscompetency",branch:$("#dbBranch").value.trim()||"main",path:"data/db.json"});if(t)TDB.setToken(t);const out=$("#dbTokRes");out.innerHTML='<span class="spinner-border spinner-border-sm"></span> Mengetes koneksi…';
@@ -4121,7 +4218,45 @@ function previewCodes(ta){let box=ta.parentElement.querySelector(".who-box");if(
   const tk=(previewCodes.t=(previewCodes.t||0)+1);Promise.all(items.slice(0,40).map(codeWho)).then(ws=>{if(tk!==previewCodes.t)return;box.innerHTML=ws.map(whoHTML).join("")+(items.length>40?`<span class="who-chip">+${items.length-40} kode lagi</span>`:"");});}
 document.addEventListener("input",e=>{const t=e.target;if(t.id==="importCode"||t.id==="dbImport"||t.id==="loadCode")previewCodes(t);});
 document.addEventListener("paste",e=>{const t=e.target;if(t&&(t.id==="importCode"||t.id==="dbImport"||t.id==="loadCode"))setTimeout(()=>previewCodes(t),0);});
-const _rst=resetAll;resetAll=function(){_rst();S.recId=null;S.coach=null;S.fromAdmin=false;SAVE.lastMgr=null;};
+/* ---------- 6. Password masuk + kotak masuk ---------- */
+try{const t=sessionStorage.getItem("tc_ai");if(t)TDB.setAdminInboxTok(t);}catch(e){}
+function adminInbox(pass){return TDB.loadPubCfg(true).then(pc=>{const b=pc&&pc.r&&pc.r.admin&&pc.r.admin.t;if(!b)return;return TDB.decWith(pass,b).then(t=>{TDB.setAdminInboxTok(t);try{sessionStorage.setItem("tc_ai",t);}catch(e){}}).catch(()=>{});}).catch(()=>{});}
+function pullInbox(){if(!TDB.canWrite())return Promise.resolve();
+  return TDB.loadPubCfg().then(()=>{const tk=TDB.adminInboxTok()||TDB.pubTok();if(!TDB.inboxCfg()||!tk)return;
+    return TDB.readInbox(tk).then(items=>{const done=(TDB.state.data&&TDB.state.data.done)||{},fresh=items.filter(it=>done[it.path]!==it.sha);if(!fresh.length)return;
+      return TDB.save(db=>{TDB.applyInbox(db,items,applyItem);},"Tarik "+fresh.length+" isian baru").then(()=>{DBV.pulled=fresh.length;toast(fresh.length+" isian baru masuk ke database.","ok");});});
+  }).catch(e=>{console.warn(e);DBV.inErr=e.message;});}
+const GATE={role:null};
+function gateModal(role){GATE.role=role;let md=$("#gateModal");if(!md){md=document.createElement("div");md.id="gateModal";md.className="det-modal";document.body.appendChild(md);md.addEventListener("click",ev=>{if(ev.target===md||ev.target.closest("[data-gx]"))md.remove();});}
+  const lab=role==="emp"?"Karyawan Baru":"Atasan / User";
+  md.innerHTML=`<div class="det-box gate-box"><div class="gate-ic"><i class="bi bi-shield-lock"></i></div><h5 class="section-title text-center">Masuk sebagai ${lab}</h5><div class="section-sub text-center">Masukkan password yang diberikan oleh tim People Development.</div>
+    <input type="password" class="form-control" id="gatePass" placeholder="Password" autocomplete="off"><div id="gateErr" class="small text-danger mt-1"></div>
+    <div class="d-flex gap-2 mt-3 justify-content-center"><button class="btn btn-navy" data-gok><i class="bi bi-box-arrow-in-right"></i> Masuk</button><button class="btn btn-outline-navy" data-gx>Batal</button></div></div>`;
+  setTimeout(()=>{const i=$("#gatePass");if(i)i.focus();},50);}
+function gateSubmit(){const v=($("#gatePass")||{}).value||"",role=GATE.role;if(!v.trim()){$("#gateErr").textContent="Password belum diisi.";return;}$("#gateErr").textContent="Memeriksa…";
+  TDB.unlock(role,v).then(r=>{if(!r.ok){$("#gateErr").textContent="Password salah.";return;}const md=$("#gateModal");if(md)md.remove();PICK.loaded=false;PICK.view=null;S.role=role;go("landing");})
+  .catch(()=>{$("#gateErr").textContent="Browser ini belum mendukung pemeriksaan password.";});}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-role]");if(!b)return;const role=b.dataset.role;if(TDB.isUnlocked(role))return;e.stopPropagation();e.preventDefault();gateModal(role);},true);
+document.addEventListener("click",e=>{if(e.target.closest("[data-gok]"))gateSubmit();});
+document.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.id==="gatePass")gateSubmit();});
+function accessHTML(){const pc=TDB.pub.cfg,ib=TDB.inboxCfg(),c=TDB.cfg();
+  return`<hr class="my-3"><h6 class="mb-1">Akses Karyawan &amp; Atasan</h6><div class="section-sub">Token umum dipakai otomatis setelah karyawan atau atasan memasukkan password-nya, lalu isian mereka masuk ke repo kotak masuk (bukan repo utama). Database menarik isinya setiap kali Admin Recap dibuka. Token umum disimpan terkunci dengan masing-masing password di <code>data/cfg.json</code>.</div>
+  <div class="small mb-2">${ib?`<span class="text-success"><i class="bi bi-check-circle"></i> Aktif · kotak masuk <b>${H(ib.owner)}/${H(ib.repo)}</b>${DBV.inErr?` · <span class="text-danger">${H(DBV.inErr)}</span>`:""}</span>`:'<span class="text-muted">Belum aktif. Karyawan dan atasan masih memakai kode / Kirim ke PD Officer.</span>'}</div>
+  <div class="row g-2"><div class="col-md-4"><label class="small-label">Owner kotak masuk</label><input class="form-control form-control-sm" id="ibOwner" value="${H((ib&&ib.owner)||c.owner)}"></div><div class="col-md-4"><label class="small-label">Repo kotak masuk</label><input class="form-control form-control-sm" id="ibRepo" value="${H((ib&&ib.repo)||"tcinbox")}"></div><div class="col-md-4"><label class="small-label">Token umum (hanya repo kotak masuk)</label><input type="password" class="form-control form-control-sm" id="ibTok" placeholder="github_pat_…"></div>
+  <div class="col-md-4"><label class="small-label">Password karyawan</label><input class="form-control form-control-sm" id="pwEmp" placeholder="mis. karyawan"></div><div class="col-md-4"><label class="small-label">Password atasan / user</label><input class="form-control form-control-sm" id="pwMgr" placeholder="mis. user"></div><div class="col-md-4"><label class="small-label">Password admin (konfirmasi)</label><input type="password" class="form-control form-control-sm" id="pwAdm"></div></div>
+  <button class="btn btn-navy btn-sm mt-2" data-db="saveAccess"><i class="bi bi-people"></i> Simpan Akses</button><div id="accRes" class="small mt-2">${DBV.acc||""}</div>`;}
+function saveAccess(){const tok=$("#ibTok").value.trim(),ib={owner:$("#ibOwner").value.trim()||TDB.cfg().owner,repo:$("#ibRepo").value.trim()||"tcinbox",branch:"main"},pe=$("#pwEmp").value.trim(),pm=$("#pwMgr").value.trim(),pa=$("#pwAdm").value;
+  const out=$("#accRes");if(!TDB.canWrite()){out.innerHTML='<span class="text-danger">Simpan dulu token admin di atas.</span>';return;}
+  if(!tok||!pe||!pm||!pa){out.innerHTML='<span class="text-danger">Isi token umum, kedua password, dan password admin.</span>';return;}
+  out.innerHTML='<span class="spinner-border spinner-border-sm"></span> Memeriksa token dan menyimpan…';
+  const salt=()=>Math.random().toString(36).slice(2)+Date.now().toString(36),se=salt(),sm=salt();
+  TDB.checkAdmin(pa).then(ok=>{if(!ok)throw new Error("Password admin salah.");return TDB.testInbox(tok,ib);})
+  .then(()=>Promise.all([TDB.hashPass(pe,se),TDB.hashPass(pm,sm),TDB.encWith(pe,tok),TDB.encWith(pm,tok),TDB.encWith(pa,tok)]))
+  .then(([he,hm,te,tm,ta])=>TDB.writePubCfg({v:1,updated:nowIso(),inbox:ib,r:{emp:{hs:se,h:he,t:te},mgr:{hs:sm,h:hm,t:tm},admin:{t:ta}}}))
+  .then(()=>{TDB.setAdminInboxTok(tok);try{sessionStorage.setItem("tc_ai",tok);}catch(e){}DBV.inErr=null;
+    DBV.acc='<span class="text-success"><i class="bi bi-check-circle"></i> Akses aktif. Karyawan memakai password <b>'+H(pe)+'</b>, atasan memakai <b>'+H(pm)+'</b>. Isian mereka sekarang tersimpan otomatis.</span>';settingsModal();})
+  .catch(e=>{DBV.acc='<span class="text-danger">'+H(e.message)+"</span>";settingsModal();});}
+const _rst=resetAll;resetAll=function(){_rst();S.recId=null;S.coach=null;S.fromAdmin=false;SAVE.lastMgr=null;SAVE.mgrPath=null;SAVE.coachPath=null;};
 function backToAdmin(){if(CO.dirty&&!confirm("Form Coaching belum disimpan. Tetap kembali ke Database?"))return;resetAll();S.role="mgr";ADMIN.tab="D";go("admin");}
 window.tcBackToAdmin=backToAdmin;
 })();
