@@ -3729,8 +3729,22 @@ function decodeObj(code){try{return JSON.parse(decodeURIComponent(escape(atob(co
 /* ---------- 1. Simpan otomatis (hanya di perangkat yang punya token) ---------- */
 const SAVE={lastMgr:null,timer:null};
 function saveStatusHTML(kind,txt){return`<div class="save-note ${kind}"><i class="bi ${kind==="ok"?"bi-cloud-check":kind==="err"?"bi-exclamation-triangle":kind==="busy"?"bi-arrow-repeat":"bi-info-circle"}"></i><span>${txt}</span></div>`;}
-function setNote(sel,kind,txt){$$(sel).forEach(el=>el.innerHTML=saveStatusHTML(kind,txt));}
-document.getElementById("btnSelfDone").addEventListener("click",()=>{
+function setNote(sel,kind,txt){$$(sel).forEach(el=>el.innerHTML=saveStatusHTML(kind,txt)+((kind==="info"||kind==="err")&&sel!=="#cfSaveNote"&&!S.demo?pdBtn(sel==="#selfSaveNote"?"self":"mgr"):""));}
+/* Kirim ke PD Officer: salin kode lalu buka Microsoft Form (tanpa token / server) */
+const PD_FORM="https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=oigDqTbnukO0NurKZBAXPbH279KRAFNEkJ4R-6TPzVhUNEVDMzFXOEdCSlJSMzVHVFNLTEtRR0NIRiQlQCNjPTEu";
+function pdBtn(kind){return`<button class="btn btn-gold btn-sm mt-2" data-sendpd="${kind}"><i class="bi bi-send"></i> Kirim ke PD Officer</button><div class="small text-muted mt-1">Kode otomatis tersalin, lalu formulir terbuka. Tempel (Ctrl+V) di kolom jawaban dan klik Kirim.</div>`;}
+function pdCodes(kind){
+  if(kind==="self")return($("#shareCode")||{}).textContent||"";
+  if(kind==="mgr")return[genAtasanCode(),genActionCode()].join("\n");
+  const ta=$("#cfSaveNote textarea");return ta?ta.value:"";}
+function copyText(t){try{if(navigator.clipboard&&window.isSecureContext)return navigator.clipboard.writeText(t);}catch(e){}return new Promise((res,rej)=>{const a=document.createElement("textarea");a.value=t;a.style.cssText="position:fixed;opacity:0";document.body.appendChild(a);a.select();try{document.execCommand("copy")?res():rej();}catch(e){rej(e);}a.remove();});}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-sendpd]");if(!b)return;
+  const code=String(pdCodes(b.dataset.sendpd)).trim();if(!code){toast("Kode belum tersedia.","err");return;}
+  const w=window.open(PD_FORM,"_blank");
+  copyText(code).then(()=>toast("Kode tersalin. Tempel (Ctrl+V) di formulir lalu klik Kirim.","ok")).catch(()=>toast("Kode gagal tersalin otomatis. Salin manual dari kotak kode, lalu tempel di formulir.","err"));
+  if(!w)toast('Popup diblokir. Buka formulir: <a href="'+PD_FORM+'" target="_blank" style="color:#fff;text-decoration:underline">klik di sini</a>',"err");});
+document.getElementById("btnSelfDone").addEventListener("click",()=>{setTimeout(selfDoneSave,0);});
+function selfDoneSave(){
   if(S.demo){setNote("#selfSaveNote","info","Contoh pengisian tidak disimpan.");return;}
   if(!TDB.canWrite()){setNote("#selfSaveNote","info","Salin kode di bawah lalu sampaikan kepada PD Officer. Kode ini juga menjadi cadangan datamu.");return;}
   const code=$("#shareCode").textContent.trim(),o=decodeObj(code);if(!o)return;
@@ -3738,7 +3752,7 @@ document.getElementById("btnSelfDone").addEventListener("click",()=>{
   TDB.save(db=>{const r=TDB.upsertSelf(db,o,code);S.recId=r.rec.id;SAVE.selfStatus=r.status;},"Self assessment: "+o.n)
     .then(()=>setNote("#selfSaveNote","ok",SAVE.selfStatus==="dobel"?"Tersimpan ke database. Catatan: nama ini sudah pernah mengisi, PD Officer bisa mengecek data dobelnya.":"Tersimpan otomatis ke database. Kode di bawah hanya cadangan."))
     .catch(e=>setNote("#selfSaveNote","err","Belum tersimpan ("+H(e.message)+"). Salin kode di bawah sebagai cadangan."));
-});
+}
 function scheduleMgrSave(){
   if(!S.emp||S.demo||S.role!=="mgr")return;
   if(!TDB.canWrite()){setNote(".mgr-save-note","info","Perangkat ini tidak tersambung ke database. Salin kedua kode di bawah dan sampaikan ke PD Officer.");return;}
@@ -3946,7 +3960,7 @@ function exportCoach(){const D=S.coach;toast('<span class="spinner-border spinne
   loadExcelJS().then(EJ=>CoachXL.build(EJ,tplBuf(),D)).then(buf=>{downloadBlob(new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),"Form Coaching New Employee - "+(D.ident.nama||"Karyawan").replace(/[\\/:*?"<>|]/g,"")+".xlsx");toast("Excel Form Coaching sudah diunduh.","ok");}).catch(e=>toast("Gagal membuat Excel: "+H(e.message),"err"));}
 window.tcExportCoach=exportCoach;
 function saveCoach(){const D=S.coach;const note=$("#cfSaveNote");
-  const showCode=(msg,kind)=>TDB.packCoach({n:D.ident.nama,rid:S.recId||null,D:D}).then(code=>{note.innerHTML=saveStatusHTML(kind||"info",msg)+`<div class="small text-muted mt-2">Kode Form Coaching (cadangan) — salin dan sampaikan ke PD Officer:</div><textarea class="form-control form-control-sm mt-1" rows="2" readonly>${code}</textarea><button class="btn btn-sm btn-gold mt-1" data-copy>Salin Kode</button>`;});
+  const showCode=(msg,kind)=>TDB.packCoach({n:D.ident.nama,rid:S.recId||null,D:D}).then(code=>{note.innerHTML=saveStatusHTML(kind||"info",msg)+`<div class="small text-muted mt-2">Kode Form Coaching (cadangan) — salin dan sampaikan ke PD Officer:</div><textarea class="form-control form-control-sm mt-1" rows="2" readonly>${code}</textarea><button class="btn btn-sm btn-gold mt-1" data-copy>Salin Kode</button>`+(kind==="ok"?"":pdBtn("coach"));});
   if(!TDB.canWrite()){showCode("Perangkat ini tidak tersambung ke database. Unduh Excel dan salin kode di bawah sebagai cadangan.");return;}
   note.innerHTML=saveStatusHTML("busy","Menyimpan Form Coaching ke database…");
   TDB.save(db=>{let rec=TDB.findTarget(db,S.emp?S.emp.name:D.ident.nama,S.recId);
