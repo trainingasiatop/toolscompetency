@@ -2343,6 +2343,7 @@ body.on-home #btnDemo,body.on-home #btnExport,body.role-emp #btnExport,body.on-h
 .save-note{font-size:13.5px;padding:12px 14px;line-height:1.45}.save-note.ok{border-left:4px solid #1d7a4a}.save-note.info,.save-note.err{border-left:4px solid #d4a82f}.save-note.err{border-left-color:#b03a2e}
 .save-note i{font-size:18px;margin-top:1px}
 .save-note{text-align:left}.save-note span{flex:1}
+.stmt-lead{margin-top:6px;font-size:13px;font-weight:600;font-style:italic;color:#14214f}
 </style></head>
 <body>
 <div class="topbar"><div class="row-top">
@@ -2746,7 +2747,7 @@ function renderAssess(mode){
       const answered=ans.filter(a=>a===true||a===false).length;
       return`<div class="assess-card"><div class="assess-head" data-toggle="${mode}-${k.code}"><div><strong>${k.name}</strong>
         ${k.caheli?`<span class="comp-chip ms-1">${k.caheli} · ${CAHELI[k.caheli].name}</span>`:''}
-        <div class="meta">${k.def}</div></div>
+        <div class="meta">${k.def}</div><div class="stmt-lead">${stmtLead(isM)}</div></div>
         <div class="d-flex align-items-center gap-2">
           ${res?(isM?`<span class="level-pill">Level ${res.level} · ${PROFICIENCY_SCALE[res.level].kategori}</span>`:`<span class="level-pill">Sudah terisi</span>`):`<span class="meta">${answered}/10</span>`}
           ${isM&&res&&res.inconsistent?'<span class="inconsistent-flag"><i class="bi bi-exclamation-triangle"></i></span>':''}
@@ -3122,7 +3123,8 @@ const MANDATORY=[
 {name:"Core Input Improvement Activity",desc:"Karyawan mengisi Improvement Activity di CORE bagian Project, sekaligus mengenal lebih dalam tentang CORE.",duration:"1 bulan",durationLead:"2 bulan",template:"{POSITION} mengisi Improvement Activity di CORE bagian Project."},
 {name:"Belajar Mandiri Materi Competency",desc:"Menyelesaikan dan mempelajari secara mandiri materi kompetensi, mengerjakan soal dan tugas yang ada di Learning Center Asiatop.",duration:"1 bulan",durationLead:"2 bulan",template:"{POSITION} menyelesaikan materi kompetensi, soal, dan tugas di Learning Center Asiatop."}];
 function paraText(c,i,isM){const t=PARA[c][i];return isM?t.charAt(0).toUpperCase()+t.slice(1):"Saya "+t;}
-function stmtText(c,i,isM){const t=PARA[c][i];return isM?"Menurut saya, "+((S.emp&&S.emp.name)||"karyawan ini")+" adalah orang yang "+t:"Menurut saya, saya adalah orang yang "+t;}
+function stmtText(c,i,isM){const t=PARA[c][i];return t.charAt(0).toUpperCase()+t.slice(1);}
+function stmtLead(isM){const n=String((S.emp&&S.emp.name)||"karyawan ini").replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));return isM?"Menurut saya, <b>"+n+"</b> adalah orang yang…":"Menurut saya, saya adalah orang yang…";}
 function renderWho(){const e=S.emp;document.getElementById("mgrWho").innerHTML=`<div class="mgr-who"><div class="who-label">ANDA SEDANG MENILAI</div><div class="who-name">${e.name}</div><div class="who-grid"><div><span>Posisi</span><b>${e.position}</b></div><div><span>Departemen</span><b>${e.department}</b></div><div><span>Level Jabatan</span><b>${e.level}</b></div></div></div>`;}
 function mandInfo(){const m=(LEVEL_RANK[S.emp.level]||1)>=2?2:1;const d=new Date();d.setMonth(d.getMonth()+m);return{dur:m+" bulan",date:fmtDate(d)};}
 function mandHTML(v){const t=a=>v==="staff"?a.duration:v==="lead"?a.durationLead:`Staff ${a.duration} · Spv/Mgr ${a.durationLead}`;return`<div class="cluster-head cluster-mandatory">Aktivitas Mandatory</div><div class="lib-grid">`+MANDATORY.map(a=>`<div class="lib-card"><strong>${a.name}</strong><span class="tag-project ms-1">Wajib</span><div class="desc">${a.desc}</div><div class="lib-footer"><span class="duration-chip"><i class="bi bi-clock-history"></i> ${t(a)}</span></div></div>`).join("")+`</div>`;}
@@ -3130,7 +3132,7 @@ DEADLINE_OPTIONS.unshift({key:"1m",label:"+1 bulan",months:1},{key:"2m",label:"+
 function exportSelf(){
   const e=S.emp,code=document.getElementById("shareCode").textContent,wb=XLSX.utils.book_new();
   const a=[["Tools Competency Assessment Karyawan Baru Asiatop — Jawaban Self Assessment"],[],["Nama",e.name],["Posisi",e.position],["Departemen",e.department],["Level Jabatan",e.level],["Tanggal",fmtDate(new Date())],[],["Kode Assessment (untuk PD Officer)",code],[],["Kompetensi","No","Pernyataan","Jawaban"]];
-  AK().forEach(k=>(S.selfAnswers[k.code]||[]).forEach((v,i)=>a.push([k.name,i+1,stmtText(k.code,i,false),v===true?"Ya":"Tidak"])));
+  AK().forEach(k=>(S.selfAnswers[k.code]||[]).forEach((v,i)=>a.push([k.name,i+1,paraText(k.code,i,false),v===true?"Ya":"Tidak"])));
   const ws=XLSX.utils.aoa_to_sheet(a);ws["!cols"]=[{wch:44},{wch:6},{wch:80},{wch:10}];XLSX.utils.book_append_sheet(wb,ws,"Jawaban Self");
   XLSX.writeFile(wb,`${S.demo?"CONTOH_":""}SelfAssessment_${e.name.replace(/\s+/g,"_")}.xlsx`);
 }
