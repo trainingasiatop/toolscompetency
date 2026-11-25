@@ -1,6 +1,6 @@
 {
  "v": 1,
- "updated": "2026-11-13T07:41:47.536Z",
+ "updated": "2026-11-25T14:41:15.410Z",
  "inbox": {
   "owner": "trainingasiatop",
   "repo": "tcinbox",
@@ -32,5 +32,11 @@
     "ct": "MqnktvSKfBtchRaT5BIjzx1b+GrFHfyE65YHHW0VfUviOLn9Rg892bisjkoLYhqIrioRnjzZBXH8uEGVCZdLltsSPTjUZoJHO3VC3Cdy+8F+x/P6AyzdC0Ilp8IJSYQwm0oi75ZqCkR9SHGcMg=="
    }
   }
+ },
+ "data": {
+  "owner": "trainingasiatop",
+  "repo": "talenthub-data",
+  "branch": "main",
+  "path": "hub.json"
  }
 }
