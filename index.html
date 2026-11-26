@@ -784,6 +784,8 @@ details.grp+details.grp{margin-top:0}
 .mepick{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .pk-sec{grid-column:1/-1;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:6px 2px 0}
 
+.introone{max-width:720px;margin:0 auto}
+
 </style>
 </head>
 <body>
@@ -1252,8 +1254,11 @@ var ST = (function(){
   function ss(k,v){ try{ if(v===undefined) return sessionStorage.getItem(k); if(v===null) sessionStorage.removeItem(k); else sessionStorage.setItem(k,v); }catch(e){ return null; } }
   function utf8b64(s){ return b64(te.encode(s)); } function fromB64utf8(s){ return td.decode(unb64(s)); }
   function site(){ var c=Object.assign({},SITE); if(/\.github\.io$/.test(location.hostname)){ c.owner=location.hostname.split(".")[0]; var seg=location.pathname.split("/").filter(Boolean)[0]; if(seg) c.repo=seg; } return c; }
-  function adminTok(){ return ls("tc_gh_token")||""; }
-  function setAdminTok(t){ ls("tc_gh_token",t?t.trim():null); }
+  function adminTok(){ return ls("tc_gh_token")||ss("th_at")||""; }
+  function setAdminTok(t,sesi){ if(sesi){ ss("th_at",t?t.trim():null); return; } ls("tc_gh_token",t?t.trim():null); if(!t) ss("th_at",null); }
+  function autoTM(){ var a=CFG.data&&CFG.data.r&&CFG.data.r.admin; return !!(a&&a.k); }
+  function adminAuto(pass){ return loadCfg(true).then(function(c){ var k=c&&c.r&&c.r.admin&&c.r.admin.k; if(!k) return ""; return decWith(pass,k).catch(function(){ return ""; }); }).then(function(t){ if(t&&!ls("tc_gh_token")) ss("th_at",t); return t; }); }
+  function saveAdminKey(pass,tok){ return encWith(pass,tok).then(function(k){ return saveCfg(function(C){ C.r=C.r||{}; C.r.admin=C.r.admin||{}; C.r.admin.k=k; }); }); }
   function api(o,path,opt){ opt=opt||{}; var h={"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"}; var tk=opt.tok!==undefined?opt.tok:adminTok(); if(tk) h.Authorization="Bearer "+tk; if(opt.body) h["Content-Type"]="application/json";
     return fetch("https://api.github.com/repos/"+o.owner+"/"+o.repo+path,{method:opt.method||"GET",headers:h,body:opt.body?JSON.stringify(opt.body):undefined,cache:"no-store"}); }
   function getFile(o,path,tok){ return api(o,"/contents/"+path+"?ref="+(o.branch||"main"),{tok:tok}).then(function(r){ if(r.status===404) return {sha:null,text:null}; if(!r.ok) throw new Error(errMsg(r.status)); return r.json().then(function(j){
@@ -1337,7 +1342,7 @@ var ST = (function(){
     return new Response(new Blob([unb64(body)]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text().then(JSON.parse); }
   function legacyCode(code){ try{ var o=JSON.parse(decodeURIComponent(escape(atob(String(code).trim().replace(/-/g,"+").replace(/_/g,"/"))))); return o; }catch(e){ return null; } }
 
-  return {encrypt:encrypt,decrypt:decrypt,encWith:encWith,decWith:decWith,hashPass:hashPass,checkAdmin:checkAdmin,adminTok:adminTok,setAdminTok:setAdminTok,
+  return {encrypt:encrypt,decrypt:decrypt,encWith:encWith,decWith:decWith,hashPass:hashPass,checkAdmin:checkAdmin,adminTok:adminTok,setAdminTok:setAdminTok,autoTM:autoTM,adminAuto:adminAuto,saveAdminKey:saveAdminKey,
     loadCfg:loadCfg,saveCfg:saveCfg,cfg:function(){ return CFG.data||{}; },site:site,dataRepo:dataRepo,inboxRepo:inboxRepo,video:video,
     unlock:unlock,isUnlocked:isUnlocked,pubTok:pubTok,canSubmit:canSubmit,submit:submit,readInbox:readInbox,adminInbox:adminInbox,inboxAdminTok:function(){ return INBOX_ADMIN.tok; },setInboxAdminTok:function(t){ INBOX_ADMIN.tok=t||""; if(t) ss("th_ai",t); },
     loadDir:loadDir,writeDir:writeDir,resetDir:function(){ DIR.list=null; },loadHub:loadHub,saveHub:saveHub,hub:function(){ return HUB.data; },hubSha:function(){ return HUB.sha; },
@@ -1428,7 +1433,7 @@ var MD = (function(){
   function logH(H,t){ H.log=H.log||[]; H.log.unshift({at:new Date().toISOString(),t:t}); if(H.log.length>300) H.log.length=300; }
 
   /* --- direktori untuk karyawan & atasan (tanpa nilai detail / IPM) --- */
-  function buildDir(H){ var out=[]; (H.pos||[]).forEach(function(p){ var per=personOfPos(H,p); if(!per) return; out.push(dirRow(p,per)); });
+  function buildDir(H){ var out=[]; (H.pos||[]).forEach(function(p){ var per=personOfPos(H,p); if(!per) return; var r=dirRow(p,per), pn=penilaiOf(H,p); if(pn){ r.pn=pn.id; r.pnN=pn.holder?pn.holder.nama:'Vacant'; r.pnJ=pn.judul; } out.push(r); });
     Object.keys(H.people).forEach(function(k){ var per=H.people[k]; if(!per.pos&&per.status!=='resign'&&per.asesmen&&per.asesmen.length) out.push(dirRow(null,per)); });
     return out.sort(function(a,b){ return a.nama.localeCompare(b.nama); }); }
   function dirRow(p,per){ var a=(per.asesmen||[]).filter(function(x){return !x.legacy;}).slice(-1)[0];
@@ -1492,6 +1497,19 @@ var MD = (function(){
     H.pos.push(p); ensureDept(H,p); return p; }
   /* --- struktur: atasan langsung (berbasis posisi) --- */
   function atasanOf(H,p){ return p&&p.atasan&&p.atasan!=='BOD'?posById(H,p.atasan):null; }
+  function mgrUp(l){ return posIdx(l)>=2; }
+  function penilaiOf(H,p){ var q=atasanOf(H,p), seen={}; while(q&&!seen[q.id]){ seen[q.id]=1; if(mgrUp(q.level)) return q; q=atasanOf(H,q); } return null; }
+  /* import struktur: baris {pid, ats, dept, lvl}; ref 'VACANT: Judul' = posisi kosong (dibuat bila belum ada) */
+  function applyStruktur(H,R){ var st={ubah:0,baru:[],miss:[],err:[]}, vac={};
+    function vkey(x){ var m=String(x==null?'':x).trim().match(/^VACANT\s*:\s*(.+)$/i); return m?m[1].trim():null; }
+    function vpos(j,dept,lvl){ var k=nrm(j); if(vac[k]) return vac[k]; var ex=(H.pos||[]).filter(function(q){ return nrm(q.judul)===nrm(tcase(j))&&!q.holder; })[0];
+      if(!ex){ ex=createPos(H,{judul:j,dept:dept||'Lainnya',level:POS.indexOf(lvl)>=0?lvl:null}); ex.levelCek=POS.indexOf(lvl)<0; st.baru.push(ex.id+' '+ex.judul); } return vac[k]=ex; }
+    R.forEach(function(r){ var j=vkey(r.pid); if(j) vpos(j,r.dept,r.lvl); });
+    R.forEach(function(r){ var j=vkey(r.ats); if(j&&!vac[nrm(j)]){ var c=cariPos(H,r.pid); vpos(j,c&&c!=='BOD'?c.dept:r.dept,null); } });
+    R.forEach(function(r){ var b=String(r.ats==null?'':r.ats).trim(); if(!b) return; var a=vkey(r.pid)?vac[nrm(vkey(r.pid))]:cariPos(H,r.pid), bb=vkey(b)?vac[nrm(vkey(b))]:cariPos(H,b);
+      if(!a||a==='BOD'){ st.miss.push('Posisi "'+r.pid+'" tidak ditemukan'); return; } if(!bb){ st.miss.push(a.id+': atasan "'+b+'" tidak ditemukan'); return; }
+      var id=bb==='BOD'?'BOD':bb.id; if((a.atasan||'')===id) return; try{ setAtasan(H,a.id,id); st.ubah++; }catch(e){ st.err.push(e.message); } });
+    return st; }
   function bawahan(H,pid){ return (H.pos||[]).filter(function(q){ return q.atasan===pid; }); }
   function rantai(H,p){ var out=[], seen={}, q=atasanOf(H,p); while(q&&!seen[q.id]){ seen[q.id]=1; out.push(q); q=atasanOf(H,q); } return out; }
   function timSemua(H,pid){ var out=[], seen={}, st=[pid]; while(st.length){ var id=st.pop(); bawahan(H,id).forEach(function(q){ if(!seen[q.id]){ seen[q.id]=1; out.push(q); st.push(q.id); } }); } return out; }
@@ -1514,7 +1532,7 @@ var MD = (function(){
     plan.hilang.forEach(function(x){ if(pilih&&pilih['h:'+x.pid]===false) return; vacate(H,x.pid,'Tidak ada di tarikan absen (resign/keluar)',tgl); n++; });
     logH(H,'Sinkron tarikan absen: '+n+' perubahan'); return n; }
 
-  return {isBOD:isBOD,atasanOf:atasanOf,bawahan:bawahan,rantai:rantai,timSemua:timSemua,setAtasan:setAtasan,cariPos:cariPos,refId:refId,statements:statements,compsFor:compsFor,score:score,answered:answered,status:status,gapRows:gapRows,devFor:devFor,blankMini:blankMini,blankIdp:blankIdp,newTarget:newTarget,qualityGate:qualityGate,jam:jam,addMonths:addMonths,addDays:addDays,
+  return {mgrUp:mgrUp,penilaiOf:penilaiOf,applyStruktur:applyStruktur,isBOD:isBOD,atasanOf:atasanOf,bawahan:bawahan,rantai:rantai,timSemua:timSemua,setAtasan:setAtasan,cariPos:cariPos,refId:refId,statements:statements,compsFor:compsFor,score:score,answered:answered,status:status,gapRows:gapRows,devFor:devFor,blankMini:blankMini,blankIdp:blankIdp,newTarget:newTarget,qualityGate:qualityGate,jam:jam,addMonths:addMonths,addDays:addDays,
     blankHub:blankHub,nrm:nrm,posById:posById,personOfPos:personOfPos,findPerson:findPerson,ensurePerson:ensurePerson,vacate:vacate,assign:assign,newPosId:newPosId,createPos:createPos,deptInfo:deptInfo,ensureDept:ensureDept,logH:logH,
     buildDir:buildDir,applyItem:applyItem,applyLegacyRecord:applyLegacyRecord,planSync:planSync,applySync:applySync,guessLevel:guessLevel,guessSeg:guessSeg,parseEnt:parseEnt,tcase:tcase,excluded:excluded};
 })();
@@ -1566,7 +1584,7 @@ function panduan(){ modal('Cara memakai tools ini',[
   videoSlot('home','Video pengenalan tools')]); }
 
 /* ---------- video ---------- */
-function videoSlot(k,judul){ var u=ST.video(k)||ST.video('home');
+function videoSlot(k,judul){ var u=ST.video('home');
   if(!u) return h('div',{class:'video',role:'img','aria-label':'Video belum tersedia'},h('div',null,h('div',{class:'mascot',style:'width:70px;margin:0 auto 8px;animation:none'},maskot('mv'+k)),h('b',null,judul),h('span',{class:'sub2'},'Video penjelasan & cara pakai · segera hadir')));
   var yt=u.match(/(?:youtu\.be\/|v=|embed\/|shorts\/)([\w-]{11})/), emb=yt?'https://www.youtube.com/embed/'+yt[1]:/\.(mp4|webm)(\?|$)/i.test(u)?null:u;
   if(!emb) return h('div',{class:'stack',style:'gap:6px'},h('video',{class:'vplayer',src:u,controls:true,preload:'metadata',playsinline:true}),h('span',{class:'sub2'},judul));
@@ -1595,7 +1613,7 @@ function masuk(k){ G.role=k; var R=ROLES[k];
   if(ST.isUnlocked(R.gate)) return tampil('intro'); gate(k); }
 function gate(k){ var R=ROLES[k], inp=h('input',{class:'input',type:'password',id:'gatePass',placeholder:'Password',autocomplete:'off',style:'text-align:center'}), err=h('div',{class:'sub2',id:'gateErr',style:'color:var(--bad);min-height:18px'}), tutup;
   function ok(){ var v=inp.value; if(!v.trim()){ err.textContent='Password belum diisi.'; return; } err.textContent='Memeriksa…';
-    var p=k==='tm'?ST.checkAdmin(v).then(function(a){ return a?ST.adminInbox(v).then(function(){ return {ok:true}; }):{ok:false}; }):ST.unlock(R.gate,v);
+    var p=k==='tm'?ST.checkAdmin(v).then(function(a){ if(!a) return {ok:false}; G.tmPass=v; return Promise.all([ST.adminInbox(v),ST.adminAuto(v)]).then(function(){ return {ok:true}; }); }):ST.unlock(R.gate,v);
     p.then(function(r){ if(!r.ok){ err.textContent='Password salah.'; inp.select(); return; } tutup(); if(k==='tm'){ TM.setUnlocked(); tampil('tm'); } else tampil('intro'); })
      .catch(function(){ err.textContent='Browser ini belum mendukung pemeriksaan password.'; }); }
   inp.addEventListener('keydown',function(e){ if(e.key==='Enter') ok(); });
@@ -1611,13 +1629,12 @@ function vIntro(){ var k=G.role, R=ROLES[k], prev=store('th3.sess.'+k);
   return h('main',{class:'page'},h('section',{class:'hero small',style:'min-height:0;padding-bottom:120px'},h('div',{class:'hero-scene'},latar()),
       h('div',{class:'logos'},h('img',{src:LOGO.asiatop,alt:'ASIATOP'})),
       h('h1',{class:'hero-title',style:'font-size:clamp(34px,6vw,64px)'},h('span',{class:'l1'},R.nama),k==='mgr'?'Penilaian & Rencana':'Self Assessment'),
-      h('p',{class:'hero-desc'},'Tonton video singkat, lalu mulai. Isian tersimpan di perangkat ini sampai dikirim.')),
+      h('p',{class:'hero-desc'},'Baca langkahnya, lalu mulai. Isian tersimpan di perangkat ini sampai dikirim.')),
     h('div',{class:'wrap mid'},h('div',{class:'card x',style:'margin-top:-80px;position:relative;z-index:3'},
-      h('div',{class:'grid2 introgrid'},h('div',{class:'stack'},h('span',{class:'eyebrow'},'Cara pakai'),h('ol',{class:'steps-ol'},langkah.map(function(t){ return h('li',null,t); })),
+      h('div',{class:'introone'},h('div',{class:'stack'},h('span',{class:'eyebrow'},'Cara pakai'),h('ol',{class:'steps-ol'},langkah.map(function(t){ return h('li',null,t); })),
           k!=='mgr'?h('div',{class:'note'},'Jawab jujur sesuai perilaku sehari-hari. Ini bukan ujian. Hasilnya menjadi bahan diskusi dengan atasan.'):h('div',{class:'note'},'Level 3 ke atas wajib didukung bukti (evidence) di CORE.'),
           h('div',{class:'row',style:'margin-top:6px'},prev&&prev.emp?h('button',{class:'btn yellow lg',id:'btn-lanjut',onclick:function(){ S=prev; tampil(lanjutView()); }},'Lanjutkan isian '+(prev.emp.nama||''),ic('right')):null,
-            h('button',{class:'btn primary lg',id:'btn-mulai',onclick:function(){ mulaiSesi(k); }},prev&&prev.emp?'Mulai baru':'Mulai',ic('right')))),
-        videoSlot(k,'Cara memakai · '+R.nama)))));
+            h('button',{class:'btn primary lg',id:'btn-mulai',onclick:function(){ mulaiSesi(k); }},prev&&prev.emp?'Mulai baru':'Mulai',ic('right'))))))));
 }
 function lanjutView(){ if(!S) return 'home'; if(S.role==='mgr'){ if(S.planDone) return 'mdone'; if(S.consDone) return 'plan'; if(S.mgrDone) return 'cons'; return S.emp?'mass':'mpick'; } if(S.selfDone) return 'selfdone'; return S.emp?'self':'id'; }
 function mulaiSesi(k){ S={role:k,tipe:ROLES[k].tipe||null,id:'AS-'+Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,5).toUpperCase(),emp:null,self:{a:{}},mgr:{a:{}},final:{},catatan:{},ev:{},plan:null,at:nowIso()}; saveS(); tampil(k==='mgr'?'mpick':'id'); }
@@ -1729,15 +1746,17 @@ VIEWS.mpick=function(){ var showAll=false, me=h('input',{class:'input',id:'meSea
         if(!d){ d={pid:e.pid,nik:e.nik,nama:e.nama,judul:e.judul,dept:e.dept,level:e.level,entitas:e.entitas,segmen:e.segmen,as:null}; dir.push(d); }
         if(!d.as||String(d.as.at)<=String(p.at)||d.as.id===p.id){ var keep=d.as&&d.as.id===p.id?d.as:{}; d.as={id:p.id,tipe:p.tipe,at:p.at,self:it.item.kind==='self3'?{a:p.a,s:p.s}:(p.self||keep.self||null),mgr:it.item.kind==='mgr3'||!!keep.mgr,final:p.final||keep.final||null}; } });
       list=dir.sort(function(a,b){ return a.nama.localeCompare(b.nama); }); meGambar(); gambar(); }).catch(function(e){ list=[]; gambar(); }); }
-  function timKu(){ if(!list||!S.olehPid) return {}; var by={}, out={}; list.forEach(function(d){ if(d.ats) (by[d.ats]=by[d.ats]||[]).push(d); });
-    (by[S.olehPid]||[]).forEach(function(d){ out[d.nik]='L'; }); var st_=(by[S.olehPid]||[]).map(function(d){ return d.pid; }), seen={};
-    while(st_.length){ var id=st_.pop(); if(!id||seen[id]) continue; seen[id]=1; (by[id]||[]).forEach(function(d){ if(!out[d.nik]) out[d.nik]='T'; st_.push(d.pid); }); } return out; }
+  function timKu(){ if(!list||!S.olehPid) return {}; var out={}; list.forEach(function(d){ if(d.pn===S.olehPid) out[d.nik]=d.ats===S.olehPid?'L':'T'; }); return out; }
+  function mgrList(){ return (list||[]).filter(function(d){ return MD.mgrUp(d.level); }); }
+  function setMe(d){ S.oleh=d.nama; S.olehPid=d.pid||''; S.olehNik=d.nik; saveS(); ST.ss('th_me',JSON.stringify({n:d.nama,p:d.pid||'',k:d.nik})); }
   function meCari(){ var t=MD.nrm(me.value); meSug.textContent=''; if(!list||t.length<2) return;
-    var hit=list.filter(function(d){ var n=MD.nrm(d.nama); return n.indexOf(t)===0||n.split(' ').some(function(w){ return w.indexOf(t)===0; }); }).slice(0,6);
-    hit.forEach(function(d){ add(meSug,h('button',{class:'sugitem',role:'option',onclick:function(){ S.oleh=d.nama; S.olehPid=d.pid||''; S.olehNik=d.nik; saveS(); me.value=d.nama; meSug.textContent=''; showAll=false; meGambar(); gambar(); panel(); }},ava(d.nama,true),h('span',null,h('b',null,d.nama),h('small',null,[d.judul,d.dept].filter(Boolean).join(' · '))))); }); }
+    var hit=mgrList().filter(function(d){ var n=MD.nrm(d.nama); return n.indexOf(t)===0||n.split(' ').some(function(w){ return w.indexOf(t)===0; }); }).slice(0,6);
+    if(!hit.length){ add(meSug,h('div',{class:'sugempty'},'Nama tidak ditemukan di daftar atasan. Penilaian diisi oleh atasan level Manager ke atas.')); return; }
+    hit.forEach(function(d){ add(meSug,h('button',{class:'sugitem',role:'option',onclick:function(){ setMe(d); me.value=d.nama; meSug.textContent=''; showAll=false; meGambar(); gambar(); panel(); }},ava(d.nama,true),h('span',null,h('b',null,d.nama),h('small',null,[d.judul,d.dept].filter(Boolean).join(' · '))))); }); }
   function meGambar(){ meBox.textContent=''; if(!S.oleh||!list) return; var T=timKu(), n=Object.keys(T).length, L=Object.keys(T).filter(function(k){ return T[k]==='L'; }).length;
     if(!S.olehPid&&!S.olehNik) return;
-    add(meBox,n?noteBox('ok','Halo <b>'+esc(S.oleh)+'</b>, tim Anda: <b>'+L+'</b> bawahan langsung'+(n>L?' + '+(n-L)+' tidak langsung':'')+'. Tim Anda ditampilkan paling atas.'):noteBox('info','Halo <b>'+esc(S.oleh)+'</b>. Struktur tim Anda belum tercatat, jadi silakan cari nama anggota tim di bawah.')); }
+    add(meBox,n?noteBox('ok','Halo <b>'+esc(S.oleh)+'</b>, ada <b>'+n+'</b> karyawan yang Anda nilai ('+L+' bawahan langsung'+(n>L?', '+(n-L)+' lewat supervisor':'')+'). Mereka ditampilkan paling atas.'):noteBox('info','Halo <b>'+esc(S.oleh)+'</b>. Struktur tim Anda belum tercatat, jadi silakan cari nama anggota tim di bawah.')); }
+  if(!S.oleh&&ST.ss('th_me')){ try{ var M=JSON.parse(ST.ss('th_me')); S.oleh=M.n; S.olehPid=M.p; S.olehNik=M.k; me.value=M.n; }catch(e){} }
   me.addEventListener('input',function(){ if(MD.nrm(me.value)!==MD.nrm(S.oleh||'')){ S.oleh=me.value; S.olehPid=''; S.olehNik=''; saveS(); meBox.textContent=''; gambar(); } meCari(); });
   function chips(d){ var a=d.as; return h('span',{class:'pk-bs'},a&&a.self?h('span',{class:'chip good'},'Self ✓'):h('span',{class:'chip slate'},'Belum self'),a&&a.mgr?h('span',{class:'chip blue'},'Atasan ✓'):null,a?h('span',{class:'chip '+(a.tipe==='existing'?'teal':'yellow')},a.tipe==='existing'?'Existing':'Baru'):null); }
   function gambar(){ grid.textContent=''; if(!list) return; var t=MD.nrm(q.value);
@@ -1746,7 +1765,7 @@ VIEWS.mpick=function(){ var showAll=false, me=h('input',{class:'input',id:'meSea
     var f=list.filter(function(d){ return (!S.olehNik||d.nik!==S.olehNik)&&(!t||MD.nrm(d.nama+' '+d.judul+' '+d.dept).indexOf(t)>=0)&&(t||showAll||!nT||T[d.nik]); });
     f.sort(function(a,b){ return rk(a)-rk(b)||(b.as&&b.as.self&&!b.as.mgr?1:0)-(a.as&&a.as.self&&!a.as.mgr?1:0)||a.nama.localeCompare(b.nama); });
     var sec=-1;
-    f.slice(0,60).forEach(function(d){ if(nT){ var r=rk(d); if(r!==sec){ sec=r; add(grid,h('div',{class:'pk-sec'},['Tim langsung','Tim tidak langsung','Karyawan lain'][r])); } } add(grid,h('button',{class:'pk-item'+(S.emp&&S.emp.nik===d.nik?' on':''),onclick:function(){ pilih(d); }},h('div',{class:'row nowrap',style:'gap:10px'},ava(d.nama,true),h('div',{class:'grow',style:'text-align:left;min-width:0'},h('b',null,d.nama),h('small',null,[d.judul,d.dept].filter(Boolean).join(' · ')))),(function(){ var c=chips(d), T=timKu(); if(T[d.nik]) c.insertBefore(h('span',{class:'chip teal'},T[d.nik]==='L'?'Tim langsung':'Tim'),c.firstChild); return c; })())); });
+    f.slice(0,60).forEach(function(d){ if(nT){ var r=rk(d); if(r!==sec){ sec=r; add(grid,h('div',{class:'pk-sec'},['Bawahan langsung','Tim lewat supervisor','Karyawan lain'][r])); } } add(grid,h('button',{class:'pk-item'+(S.emp&&S.emp.nik===d.nik?' on':''),onclick:function(){ pilih(d); }},h('div',{class:'row nowrap',style:'gap:10px'},ava(d.nama,true),h('div',{class:'grow',style:'text-align:left;min-width:0'},h('b',null,d.nama),h('small',null,[d.judul,d.dept].filter(Boolean).join(' · ')))),(function(){ var c=chips(d), T=timKu(); if(T[d.nik]) c.insertBefore(h('span',{class:'chip teal'},T[d.nik]==='L'?'Bawahan langsung':'Tim Anda'),c.firstChild); return c; })())); });
     if(f.length>60) add(grid,h('div',{class:'sub2'},'+'+(f.length-60)+' nama lagi, persempit pencarian.'));
     if(nT&&!t&&!showAll) add(grid,h('button',{class:'btn link sm pk-sec',id:'btn-show-all',onclick:function(){ showAll=true; gambar(); }},'Tampilkan semua karyawan'));
     if(!f.length&&nT) add(grid,h('div',{class:'sub2'},'Tidak ada yang cocok.')); }
@@ -1759,9 +1778,10 @@ VIEWS.mpick=function(){ var showAll=false, me=h('input',{class:'input',id:'meSea
     add(selBox,h('div',{class:'card x selcard'},h('div',{class:'row nowrap',style:'gap:14px'},ava(e.nama),h('div',{class:'grow'},h('h3',{style:'font-size:19px'},e.nama),h('p',{class:'sub2'},[e.judul,e.dept,e.level].filter(Boolean).join(' · ')))),
       hasSelf?noteBox('ok','Self assessment sudah diisi. Anda menilai secara independen dulu, lalu melihat jawaban karyawan saat konsensus.'):noteBox('info','Karyawan belum mengisi self assessment. Anda tetap bisa menilai sekarang; skor final mengikuti penilaian Anda.'),
       h('div',{class:'field',style:'margin-top:12px'},h('label',null,'Jenis karyawan'),tb),
-      h('div',{class:'grid2',style:'margin-top:12px'},h('div',{class:'field'},h('label',null,'Nama Anda (atasan / penilai)'),h('input',{class:'input',id:'mgrName',value:S.oleh||'',oninput:function(ev){ S.oleh=ev.target.value; saveS(); }})),
+      (function(){ var d=(list||[]).filter(function(x){ return x.nik===e.nik; })[0]; if(!d||!S.olehPid||!d.pn||d.pn===S.olehPid) return null; return noteBox('info','Menurut struktur, penilai '+esc(e.nama)+' adalah <b>'+esc(d.pnN||'')+'</b> ('+esc(d.pnJ||'')+'). Anda tetap bisa menilai bila memang ditugaskan.'); })(),
+      h('div',{class:'grid2',style:'margin-top:12px'},h('div',{class:'field'},h('label',null,'Penilai (atasan level Manager ke atas)'),mgrList().length?h('div',{class:'input ro',id:'mgrName'},S.olehPid||S.olehNik?S.oleh:'Isi "Siapa Anda?" di atas'):h('input',{class:'input',id:'mgrName',value:S.oleh||'',oninput:function(ev){ S.oleh=ev.target.value; saveS(); }})),
         h('div',{class:'field'},h('label',null,'Level jabatan karyawan'),sel_(POS,e.level,function(v){ e.level=v; saveS(); }))),
-      h('div',{class:'row',style:'justify-content:flex-end;margin-top:14px'},h('button',{class:'btn primary lg',id:'btn-start-mgr',onclick:function(){ if(!S.tipe){ toast('Pilih jenis karyawan dulu.',true); return; } S.dirty=true; saveS(); tampil('mass'); }},'Mulai penilaian',ic('right'))))); }
+      h('div',{class:'row',style:'justify-content:flex-end;margin-top:14px'},h('button',{class:'btn primary lg',id:'btn-start-mgr',onclick:function(){ if(!S.tipe){ toast('Pilih jenis karyawan dulu.',true); return; } if(mgrList().length&&!(S.olehPid||S.olehNik)){ toast('Isi "Siapa Anda?" dulu (atasan level Manager ke atas).',true); me.focus(); return; } if(!String(S.oleh||'').trim()){ toast('Isi nama penilai dulu.',true); return; } S.dirty=true; saveS(); tampil('mass'); }},'Mulai penilaian',ic('right'))))); }
   function pakaiKode(){ var c=paste.value.trim(); pasteRes.textContent=''; if(!c) return;
     ST.unpack(c).then(function(o){ if(o.t!=='self3') throw 0; var e=o.emp; S.emp=e; S.id=o.id; S.tipe=o.tipe; S.self={a:decAns(o.a),s:o.s}; S.mgr={a:{}}; saveS(); panel(); add(pasteRes,noteBox('ok','Kode valid: <b>'+esc(e.nama)+'</b> · '+esc(e.judul||''))); })
       .catch(function(){ add(pasteRes,noteBox('err','Kode tidak dikenali. Pastikan kode dari Self Assessment versi terbaru.')); }); }
@@ -1770,7 +1790,7 @@ VIEWS.mpick=function(){ var showAll=false, me=h('input',{class:'input',id:'meSea
   function sw(m){ mode=m; tabs.children[0].className=m==='pick'?'on':''; tabs.children[1].className=m==='paste'?'on':''; pPick.hidden=m!=='pick'; pPaste.hidden=m!=='paste'; }
   q.addEventListener('input',gambar); load(); if(S.emp) setTimeout(panel,0);
   return h('div',{class:'wrap mid'},h('div',{class:'pagehead'},h('span',{class:'eyebrow'},'User / Atasan'),h('h1',null,'Pilih anggota tim'),h('p',null,'Isi nama Anda dulu, lalu pilih anggota tim yang akan dinilai.')),
-    h('div',{class:'card x'},h('h3',{class:'sec-h'},'Siapa Anda?'),h('p',{class:'sub2'},'Ketik nama Anda supaya anggota tim Anda tampil paling atas.'),h('div',{class:'stack',style:'gap:8px;margin-top:8px'},me,meSug,meBox)),
+    h('div',{class:'card x'},h('h3',{class:'sec-h'},'Siapa Anda?'),h('p',{class:'sub2'},'Penilaian diisi oleh atasan level Manager ke atas. Ketik nama Anda, karyawan yang Anda nilai akan tampil paling atas.'),h('div',{class:'stack',style:'gap:8px;margin-top:8px'},me,meSug,meBox)),
     h('div',{class:'card x'},tabs,h('div',{style:'margin-top:12px'},pPick,pPaste)),selBox); };
 
 /* ---------- 4. Konsensus ---------- */
@@ -1905,7 +1925,7 @@ var TM = (function(){
   function navTM(){ return h('header',{class:'topnav'},h('div',{class:'wrap wide'},
     h('button',{class:'brand',onclick:pulang},h('img',{src:LOGO.asiatop,alt:'ASIATOP'}),h('span',{class:'bdiv'}),h('span',null,'Talent Hub',h('small',null,'Talent Management'))),
     h('nav',{class:'navlinks many'},TABS.map(function(t){ return h('button',{class:st.tab===t[0]&&!st.open?'on':'',id:'tmtab-'+t[0],title:t[1],onclick:function(){ go(t[0]); }},ic(t[2]),h('span',{class:'lbl'},t[1])); })),
-    h('div',{class:'nav-right',style:'margin-left:0'},h('button',{class:'btn ghost sm',onclick:function(){ ST.ss('th_tm',null); ST.ss('th_ai',null); tampil('home'); }},ic('ban'),h('span',{class:'lg-only'},'Kunci')),h('button',{class:'btn ghost sm',id:'btn-home',onclick:pulang},ic('home'),h('span',{class:'lg-only'},'Home'))))); }
+    h('div',{class:'nav-right',style:'margin-left:0'},h('button',{class:'btn ghost sm',onclick:function(){ ST.ss('th_tm',null); ST.ss('th_ai',null); ST.ss('th_at',null); G.tmPass=null; st.loaded=false; tampil('home'); }},ic('ban'),h('span',{class:'lg-only'},'Kunci')),h('button',{class:'btn ghost sm',id:'btn-home',onclick:pulang},ic('home'),h('span',{class:'lg-only'},'Home'))))); }
   function view(){ if(!st.loaded&&!st.busy) load();
     var body;
     if(st.busy&&!H()) body=h('div',{class:'empty',style:'margin-top:40px'},h('div',{class:'mascot',style:'width:80px;margin:0 auto 10px'},maskot('tml')),h('b',null,'Memuat database…'));
@@ -1931,7 +1951,7 @@ var TM = (function(){
   function save(mut,msg,ok){ st.busy=true; return ST.saveHub(mut,msg).then(function(D){ st.busy=false; ST.writeDir(MD.buildDir(D)).catch(function(){}); if(ok!==false) toast(ok||'Tersimpan.'); rer(); return D; })
       .catch(function(e){ st.busy=false; toast('Gagal menyimpan: '+e.message,true); throw e; }); }
 
-  function setupView(){ return h('div',{class:'stack lg'},h('div',{class:'pagehead'},h('span',{class:'eyebrow'},'Talent Management'),h('h1',null,'Aktifkan perangkat ini'),h('p',null,'Database karyawan tersimpan di repo private. Masukkan kunci akses (token) di Pengaturan agar perangkat ini bisa membaca dan menyimpan data.')),
+  function setupView(){ return h('div',{class:'stack lg'},h('div',{class:'pagehead'},h('span',{class:'eyebrow'},'Talent Management'),h('h1',null,'Aktifkan perangkat ini'),h('p',null,ST.autoTM()?'Sesi login sudah berakhir. Klik Kunci lalu masuk lagi dengan password TM.':'Koneksi database belum diatur. Admin TM cukup menempelkan token sekali di Pengaturan; setelah itu semua anggota TM tersambung otomatis hanya dengan password TM.')),
       h('div',{class:'row'},h('button',{class:'btn primary lg',onclick:function(){ go('set'); }},ic('shield'),'Buka Pengaturan'))); }
   function emptyHub(){ return h('div',{class:'stack lg'},h('div',{class:'pagehead'},h('h1',null,'Database belum ada'),h('p',null,'Repo data sudah terhubung, tetapi belum berisi database. Buat dari tarikan absen atau pulihkan dari backup.')),
       h('div',{class:'row'},h('button',{class:'btn primary',onclick:function(){ impAbsen(true); }},ic('up'),'Buat dari tarikan absen'),h('button',{class:'btn ghost',onclick:restore},ic('up'),'Pulihkan dari backup'))); }
@@ -1951,7 +1971,7 @@ var TM = (function(){
     var idps=[]; ppl.forEach(function(p){ (p.idp||[]).forEach(function(x){ if(!x.legacy) idps.push({p:p,x:x}); }); });
     var aktif=idps.filter(function(o){ return o.x.status==='Berjalan'||o.x.status==='Mid-review'; }).length;
     var due=idps.filter(function(o){ var m=o.x.mid||o.x.selesai; return o.x.status!=='Selesai'&&m&&(new Date(m)-now)<30*864e5; });
-    var cek=P.filter(function(p){ return p.levelCek; }), noAts=P.filter(function(p){ return !p.atasan; });
+    var cek=P.filter(function(p){ return p.levelCek; }), noAts=P.filter(function(p){ return !p.atasan; }), pnVac=P.filter(function(p){ var x=MD.penilaiOf(D,p); return p.holder&&x&&!x.holder; });
     return h('div',{class:'stack lg'},h('div',{class:'pagehead row between'},h('div',null,h('span',{class:'eyebrow'},'Talent Hub'),h('h1',null,'Ringkasan'),h('p',null,'Diperbarui '+fmtTgl(D.updated)+' · revisi '+(D.rev||0)+(st.inErr?' · kotak masuk: '+st.inErr:''))),
         h('button',{class:'btn soft',id:'btn-pull',onclick:function(){ toast('Menarik kiriman…'); pull().then(function(n){ if(!n) toast('Tidak ada kiriman baru.'); rer(); }); }},ic('down'),'Tarik kiriman baru')),
       h('div',{class:'kpis k6'},kpi(P.length,'Posisi',null,function(){ go('db'); }),kpi(isi,'Terisi','good',function(){ st.f.stat='isi'; go('db'); }),kpi(P.length-isi,'Vacant','bad',function(){ st.f.stat='vacant'; go('db'); }),
@@ -1959,6 +1979,7 @@ var TM = (function(){
         kpi(asY+' / '+fin,'Asesmen '+yr+' / final','blue',function(){ go('ra'); }),kpi(aktif,'IDP aktif','blue',function(){ go('ri'); })),
       h('div',{class:'grid2 ring2'},
         h('div',{class:'card x'},h('h3',{class:'sec-h'},'Perlu perhatian'),h('ul',{class:'todo'},
+          pnVac.length?h('li',null,h('b',null,pnVac.length+' karyawan'),' penilainya (Manager ke atas) sedang Vacant, jadi dinilai TM dulu lewat "Nilai sebagai atasan (TM)". ',h('button',{class:'btn link sm',onclick:function(){ go('org'); }},'Lihat')):null,
           noAts.length?h('li',null,h('b',null,noAts.length+' posisi'),' belum punya atasan langsung. ',h('button',{class:'btn link sm',onclick:function(){ go('org'); }},'Lihat')):null,
           cek.length?h('li',null,h('b',null,cek.length+' posisi'),' levelnya ditebak dari nama jabatan dan perlu dicek. ',h('button',{class:'btn link sm',onclick:function(){ st.f.stat='cek'; go('db'); }},'Lihat')):null,
           due.length?h('li',null,h('b',null,due.length+' IDP'),' mendekati/lewat jadwal mid-cycle atau closing. ',h('button',{class:'btn link sm',onclick:function(){ go('ri'); }},'Lihat')):null,
@@ -2010,7 +2031,7 @@ var TM = (function(){
     return h('div',{class:'stack'},h('button',{class:'btn link sm',style:'align-self:flex-start',onclick:function(){ st.open=null; rer(); }},ic('left'),'Kembali ke daftar'),
       h('div',{class:'card x hubhead'},h('div',{class:'row nowrap',style:'gap:16px'},per?ava(per.nama):h('span',{class:'ava',style:'background:#C9D6EE;color:#4A5F86'},'?'),
         h('div',{class:'grow'},h('h2',{style:'font-size:24px'},nama),h('p',{class:'sub2'},p?[p.judul,p.dept,p.divisi].join(' · '):[per.judulLama,per.deptLama].filter(Boolean).join(' · ')||'Belum terhubung ke posisi'),
-          h('div',{class:'row',style:'gap:6px;margin-top:6px'},p?h('span',{class:'chip slate mono'},p.id):null,p?h('span',{class:'chip '+(p.levelCek?'warn':'slate')},p.level):null,p?h('span',{class:'chip '+(p.segmen==='Sales Area'?'orange':'blue')},p.segmen):null,p?h('span',{class:'chip slate'},ENTK[p.entitas]):null,per?h('span',{class:'chip slate mono'},'NIK '+per.nik):null,per&&per.doj?h('span',{class:'chip slate'},'DOJ '+fmtTgl(per.doj)):null,p&&p.atasan?h('span',{class:'chip teal'},'Atasan: '+atsLabel(D,p)):null,!p||!p.holder?h('span',{class:'chip bad'},p?'Vacant':'Tanpa posisi'):null)))),
+          h('div',{class:'row',style:'gap:6px;margin-top:6px'},p?h('span',{class:'chip slate mono'},p.id):null,p?h('span',{class:'chip '+(p.levelCek?'warn':'slate')},p.level):null,p?h('span',{class:'chip '+(p.segmen==='Sales Area'?'orange':'blue')},p.segmen):null,p?h('span',{class:'chip slate'},ENTK[p.entitas]):null,per?h('span',{class:'chip slate mono'},'NIK '+per.nik):null,per&&per.doj?h('span',{class:'chip slate'},'DOJ '+fmtTgl(per.doj)):null,p&&p.atasan?h('span',{class:'chip teal'},'Atasan: '+atsLabel(D,p)):null,p&&MD.penilaiOf(D,p)&&MD.penilaiOf(D,p).id!==p.atasan?h('span',{class:'chip blue'},'Penilai: '+(MD.penilaiOf(D,p).holder?MD.penilaiOf(D,p).holder.nama:'Vacant')+' · '+MD.penilaiOf(D,p).judul):null,!p||!p.holder?h('span',{class:'chip bad'},p?'Vacant':'Tanpa posisi'):null)))),
       h('div',{class:'tabs2 show'},OT.map(function(t){ return h('button',{class:st.otab===t[0]?'on':'',id:'otab-'+t[0],onclick:function(){ st.otab=t[0]; rer(); }},t[1]); })),body); }
   function hProfil(p,per){ var D=H(), box=h('div',{class:'grid2 hub2'});
     if(p){ var o={judul:p.judul,dept:p.dept,divisi:p.divisi,entitas:p.entitas,segmen:p.segmen,level:p.level,atasan:p.atasan||''};
@@ -2149,7 +2170,9 @@ var TM = (function(){
     return h('div',{class:'field',style:'margin-top:10px'},h('label',null,'Atasan langsung (ketik nama / posisi / POS ID, atau BOD)'),dl,h('input',{class:'input',id:'atsInput',list:'poslist-'+p.id,value:cur||'',placeholder:'Belum diisi',oninput:function(e){ o.atasan=e.target.value; }})); }
   function strukturMini(D,p){ var ch=MD.rantai(D,p).reverse(), sub=MD.bawahan(D,p.id), tim=MD.timSemua(D,p.id);
     function lnk(q){ return h('button',{class:'btn link sm',onclick:function(){ st.open=q.id; st.otab='profil'; rer(); }},(q.holder?q.holder.nama:'Vacant')+' · '+q.judul); }
+    var pn=MD.penilaiOf(D,p);
     return h('div',{class:'stack',style:'gap:6px;margin-top:16px'},h('h3',{class:'sec-h'},'Struktur'),
+      h('div',{class:'row',style:'gap:6px'},h('small',{class:'dim'},'Penilai (User/Atasan, Manager ke atas):'),pn?lnk(pn):h('span',{class:'chip '+(MD.mgrUp(p.level)&&p.atasan==='BOD'?'slate':'warn')},MD.mgrUp(p.level)&&p.atasan==='BOD'?'BOD':'Belum ada'),pn&&!pn.holder?h('span',{class:'chip bad'},'Vacant'):null),
       h('div',{class:'crumb'},p.atasan==='BOD'||(ch.length&&ch[0].atasan==='BOD')?h('span',{class:'chip slate'},'BOD'):null,ch.map(function(q){ return [h('span',{class:'dim'},'›'),lnk(q)]; }),h('span',{class:'dim'},'›'),h('b',null,'posisi ini'),!p.atasan?h('span',{class:'chip warn'},'Atasan belum diisi'):null),
       sub.length?h('div',null,h('small',{class:'dim'},'Bawahan langsung ('+sub.length+')'+(tim.length>sub.length?' · total tim '+tim.length:'')),h('div',{class:'stack',style:'gap:0'},sub.map(lnk))):h('small',{class:'dim'},'Tidak ada bawahan langsung.')); }
   function vOrg(){ var D=H(), P=D.pos, f=st.org=st.org||{div:'',q:'',open:{}}, ids={}, kids={};
@@ -2172,7 +2195,7 @@ var TM = (function(){
     var punya=P.filter(function(p){ return p.atasan&&p.atasan!=='BOD'&&ids[p.atasan]; }).length;
     return h('div',{class:'stack'},h('div',{class:'pagehead row between'},h('div',null,h('span',{class:'eyebrow'},'Struktur organisasi'),h('h1',null,'Atasan & tim'),h('p',null,'Berbasis posisi, BOD/Direktur tidak dimasukkan. Atasan diisi di profil posisi atau lewat Import → Struktur & atasan langsung.')),
         h('div',{class:'row'},h('button',{class:'btn soft',onclick:impStruktur},ic('up'),'Import struktur'),h('button',{class:'btn ghost',onclick:eksporOrg},ic('down'),'Unduh Excel struktur'))),
-      h('div',{class:'kpis k4'},kpi(punya,'Punya atasan','good'),kpi(bod.length,'Melapor ke BOD'),kpi(lepas.length,'Atasan belum diisi',lepas.length?'bad':null),kpi(akar.length,'Puncak struktur')),
+      h('div',{class:'kpis k4'},kpi(punya,'Punya atasan','good'),kpi(bod.length,'Melapor ke BOD'),kpi(lepas.length,'Atasan belum diisi',lepas.length?'bad':null),kpi(P.filter(function(p){ var x=MD.penilaiOf(D,p); return p.holder&&x&&!x.holder; }).length,'Penilainya Vacant','warn')),
       h('div',{class:'filters'},qi,h('select',{class:'select sm',onchange:function(e){ f.div=e.target.value; rer(); }},h('option',{value:''},'Semua divisi'),D.master.divisi.map(function(v){ return h('option',{value:v,selected:f.div===v?true:null},v); })),
         h('button',{class:'btn link sm',onclick:function(){ P.forEach(function(p){ if(kids[p.id]) f.open[p.id]=true; }); rer(); }},'Buka semua'),h('button',{class:'btn link sm',onclick:function(){ P.forEach(function(p){ if(kids[p.id]) f.open[p.id]=false; }); rer(); }},'Tutup semua')),
       h('div',{class:'card x orgtree',id:'orgTree'},akar.filter(ada).length?akar.filter(ada).map(function(p){ return node(p,0); }):h('div',{class:'empty'},h('b',null,'Belum ada struktur'),h('p',{class:'sub2'},'Isi atasan langsung lewat Import → Struktur & atasan langsung.'))),
@@ -2180,15 +2203,13 @@ var TM = (function(){
   function eksporOrg(){ var D=H(), rows=[['POS ID','Posisi','Pemegang','Departemen','Divisi','Level','ATASAN (POS ID)','Posisi atasan','Pemegang atasan','Jumlah bawahan langsung']];
     D.pos.forEach(function(p){ rows.push([p.id,p.judul,p.holder?p.holder.nama:'Vacant',p.dept,p.divisi,p.level].concat(atsCols(D,p).slice(0,1)).concat(atsCols(D,p).slice(1)).concat([MD.bawahan(D,p.id).length])); });
     unduhXlsx('Struktur_Atasan_AsiaGroup_'+tgl()+'.xlsx',[{name:'Atasan langsung',rows:rows}]); }
-  function impStruktur(){ wizard({title:'Import struktur & atasan langsung',desc:'Satu baris per posisi: kolom posisi (POS ID / NIK / nama pemegang) dan kolom atasan (POS ID / NIK / nama atasan, atau BOD). Sel atasan kosong = tidak diubah.',
-    fields:[{k:'pid',label:'Posisi (POS ID / NIK / nama)',req:true,syn:[/^pos ?-?id$/,/^pos ?-?id\b(?!.*atasan)/,/kode posisi/,/^id posisi/]},{k:'ats',label:'Atasan (POS ID / NIK / nama / BOD)',req:true,syn:[/^atasan/,/reports? to/,/superior/,/^parent/]}],
-    done:function(R){ var D=H(), ok=[], miss=[], err=[];
-      R.forEach(function(r){ var a=MD.cariPos(D,r.pid), b=String(r.ats==null?'':r.ats).trim(); if(!b) return; var bb=MD.cariPos(D,b);
-        if(!a||a==='BOD'){ miss.push('Posisi "'+r.pid+'" tidak ditemukan'); return; } if(!bb){ miss.push(a.id+': atasan "'+b+'" tidak ditemukan'); return; } ok.push([a.id,bb==='BOD'?'BOD':bb.id]); });
-      var X=JSON.parse(JSON.stringify(D)), n=0; ok.forEach(function(x){ try{ if((MD.posById(X,x[0]).atasan||'')!==x[1]){ MD.setAtasan(X,x[0],x[1]); n++; } }catch(e){ err.push(e.message); } });
-      var tutup=modal('Rencana import struktur',[h('p',null,h('b',null,n+' posisi'),' akan diperbarui atasannya. '+(ok.length-n-err.length>0?(ok.length-n-err.length)+' sudah sama. ':'')),
-        miss.length||err.length?h('details',{open:true},h('summary',null,h('b',null,(miss.length+err.length)+' baris dilewati')),h('div',{class:'stack',style:'gap:2px;max-height:220px;overflow:auto'},miss.concat(err).map(function(t){ return h('small',{class:'dim'},t); }))):null,
-        h('button',{class:'btn primary',id:'btn-org-ok',disabled:n?null:true,onclick:function(){ tutup(); save(function(Y){ var k=0; ok.forEach(function(x){ try{ MD.setAtasan(Y,x[0],x[1]); k++; }catch(e){} }); MD.logH(Y,'Import struktur: '+k+' posisi'); },'Import struktur','Struktur diperbarui.').then(function(){ go('org'); }); }},'Terapkan')],true); }}); }
+  function impStruktur(){ wizard({title:'Import struktur & atasan langsung',desc:'Satu baris per posisi: kolom posisi (POS ID / NIK / nama pemegang) dan kolom atasan (POS ID / NIK / nama atasan, BOD, atau "VACANT: Nama posisi" untuk atasan yang posisinya kosong). Sel atasan kosong = tidak diubah.',
+    fields:[{k:'pid',label:'Posisi (POS ID / NIK / nama)',req:true,syn:[/^pos ?-?id$/,/^pos ?-?id\b(?!.*atasan)/,/kode posisi/,/^id posisi/]},{k:'ats',label:'Atasan (POS ID / NIK / nama / BOD / VACANT:)',req:true,syn:[/^atasan/,/reports? to/,/superior/,/^parent/]},{k:'dept',label:'Departemen (untuk posisi Vacant baru)',syn:[/^departemen/,/^department/]},{k:'lvl',label:'Level (untuk posisi Vacant baru)',syn:[/^level/]}],
+    done:function(R){ var X=JSON.parse(JSON.stringify(H())), r=MD.applyStruktur(X,R);
+      var tutup=modal('Rencana import struktur',[h('p',null,h('b',null,r.ubah+' posisi'),' akan diperbarui atasannya.'+(r.baru.length?' '+r.baru.length+' posisi Vacant baru dibuat.':'')),
+        r.baru.length?h('details',null,h('summary',null,h('b',null,r.baru.length+' posisi Vacant baru')),h('div',{class:'stack',style:'gap:2px;max-height:180px;overflow:auto'},r.baru.map(function(t){ return h('small',null,t); }))):null,
+        r.miss.length||r.err.length?h('details',{open:true},h('summary',null,h('b',null,(r.miss.length+r.err.length)+' baris dilewati')),h('div',{class:'stack',style:'gap:2px;max-height:220px;overflow:auto'},r.miss.concat(r.err).map(function(t){ return h('small',{class:'dim'},t); }))):null,
+        h('button',{class:'btn primary',id:'btn-org-ok',disabled:(r.ubah||r.baru.length)?null:true,onclick:function(){ tutup(); save(function(Y){ var z=MD.applyStruktur(Y,R); MD.logH(Y,'Import struktur: '+z.ubah+' posisi'+(z.baru.length?', '+z.baru.length+' posisi Vacant baru':'')); },'Import struktur','Struktur diperbarui.').then(function(){ go('org'); }); }},'Terapkan')],true); }}); }
   function impDivisi(){ wizard({title:'Import divisi per departemen',desc:'Kolom departemen dan divisi. Divisi di master dan di semua posisi dengan departemen itu ikut diperbarui.',
     fields:[{k:'dept',label:'Departemen',req:true,syn:[/^departemen/,/^department/,/^dept/]},{k:'divisi',label:'Divisi',req:true,syn:[/divisi.*final/,/^divisi$/,/^division/]}],
     done:function(R){ var D=H(), plan=[], miss=[]; R.forEach(function(r){ var d=String(r.dept||'').trim(), v=String(r.divisi||'').trim(); if(!d||!v) return; var di=MD.deptInfo(D,d); if(!di.nama){ miss.push(d); return; } if(di.divisi!==v) plan.push([di.nama,di.divisi,v]); });
@@ -2270,24 +2291,35 @@ var TM = (function(){
   function vSet(){ var c=ST.cfg(), dr=ST.dataRepo(), ib=ST.inboxRepo(), V=JSON.parse(JSON.stringify(c.video||{})), o={tok:'',owner:dr.owner,repo:dr.repo,path:dr.path}, a={tok:'',owner:(ib&&ib.owner)||'trainingasiatop',repo:(ib&&ib.repo)||'tcinbox',pe:'',pm:'',pa:''}, res1=h('div',{class:'sub2'}), res2=h('div',{class:'sub2'});
     function f(l,obj,k,type,ph){ return h('div',{class:'field'},h('label',null,l),h('input',{class:'input',type:type||'text',value:obj[k]||'',placeholder:ph||'',oninput:function(e){ obj[k]=e.target.value; }})); }
     return h('div',{class:'stack'},h('div',{class:'pagehead'},h('span',{class:'eyebrow'},'Pengaturan'),h('h1',null,'Penyimpanan, akses, & video')),
-      h('div',{class:'card x'},h('h3',{class:'sec-h'},'1. Penyimpanan Talent Management (perangkat ini)'),h('p',{class:'sub2'},'Kunci akses (fine-grained token) hanya disimpan di browser ini. Token perlu izin Contents: Read and write untuk repo situs ('+ST.site().repo+'), repo data, dan repo kotak masuk.'+(ST.adminTok()?' Perangkat ini sudah punya token.':'')),
-        h('div',{class:'grid2',style:'margin-top:10px'},f('Token',o,'tok','password',ST.adminTok()?'Tersimpan · isi untuk mengganti':'github_pat_…'),f('Owner repo data',o,'owner'),f('Repo data (private)',o,'repo'),f('Berkas database',o,'path')),
-        h('div',{class:'row',style:'margin-top:10px'},h('button',{class:'btn primary',id:'btn-tok-save',onclick:function(){ if(o.tok) ST.setAdminTok(o.tok); res1.textContent='Memeriksa…';
-          var data={owner:o.owner,repo:o.repo,branch:'main',path:o.path||'hub.json'};
-          ST.testRepo(ST.site()).then(function(){ return ST.testRepo(data); }).then(function(){ return ST.saveCfg(function(C){ C.data=data; }); }).then(function(){ res1.innerHTML='<span style="color:var(--good)">✓ Tersambung ke repo situs & repo data.</span>'; st.loaded=false; })
-            .catch(function(e){ res1.innerHTML='<span style="color:var(--bad)">'+esc(e.message)+'</span>'; }); }},'Simpan & tes'),ST.adminTok()?h('button',{class:'btn danger',onclick:function(){ ST.setAdminTok(null); toast('Token dihapus dari perangkat ini.'); rer(); }},'Hapus token'):null),res1),
+      (function(){ var auto=ST.autoTM(), pakai={v:true}, pw={v:''};
+        var fields=h('div',{class:'stack',style:'gap:10px;margin-top:10px'},h('div',{class:'grid2'},f('Token admin (fine-grained, sekali saja)',o,'tok','password',ST.adminTok()?'Tersimpan · isi untuk mengganti':'github_pat_…'),f('Owner repo data',o,'owner'),f('Repo data (private)',o,'repo'),f('Berkas database',o,'path')),
+          h('label',{class:'mini-ck'},h('input',{type:'checkbox',checked:true,onchange:function(e){ pakai.v=e.target.checked; }}),'Pakai untuk semua TM: token dikunci dengan password TM, jadi anggota TM cukup login dengan password'),
+          G.tmPass?null:h('div',{class:'grid2'},h('div',{class:'field'},h('label',null,'Password TM (konfirmasi)'),h('input',{class:'input',type:'password',oninput:function(e){ pw.v=e.target.value; }}))),
+          h('div',{class:'row'},h('button',{class:'btn primary',id:'btn-tok-save',onclick:function(){ var tok=(o.tok||ST.adminTok()||'').trim(); if(!tok){ res1.textContent='Tempel token admin dulu.'; return; } res1.textContent='Memeriksa…';
+            var data={owner:o.owner,repo:o.repo,branch:'main',path:o.path||'hub.json'}, pass=G.tmPass||pw.v, prev=ST.adminTok(); ST.setAdminTok(tok);
+            ST.testRepo(ST.site()).then(function(){ return ST.testRepo(data); })
+              .then(function(){ if(!pakai.v) return null; return ST.checkAdmin(pass).then(function(ok){ if(!ok) throw new Error('Password TM salah / belum diisi.'); }); })
+              .then(function(){ return ST.saveCfg(function(C){ C.data=data; }); })
+              .then(function(){ return pakai.v?ST.saveAdminKey(pass,tok):null; })
+              .then(function(){ res1.innerHTML='<span style="color:var(--good)">✓ Tersambung.'+(pakai.v?' Semua TM sekarang cukup login dengan password TM.':'')+'</span>'; st.loaded=false; setTimeout(rer,900); })
+              .catch(function(e){ if(prev!==tok) ST.setAdminTok(prev||null); res1.innerHTML='<span style="color:var(--bad)">'+esc(e.message)+'</span>'; }); }},'Simpan & tes'),
+            ST.adminTok()&&!auto?h('button',{class:'btn danger',onclick:function(){ ST.setAdminTok(null); toast('Token dihapus dari perangkat ini.'); rer(); }},'Hapus token'):null));
+        return h('div',{class:'card x'},h('h3',{class:'sec-h'},'1. Koneksi database Talent Management'),
+          auto?noteBox('ok','<b>Koneksi otomatis aktif.</b> Semua anggota TM cukup login dengan password TM, tanpa token. '+(ST.adminTok()?'Perangkat ini sedang tersambung.':'')):noteBox('info','Tempel token admin <b>sekali</b> di sini. Setelah itu anggota TM lain cukup login dengan password TM.'),
+          auto?h('details',{style:'margin-top:10px'},h('summary',null,h('b',null,'Lanjutan: ganti token / repo')),fields):fields,res1,
+          h('p',{class:'sub2',style:'margin-top:8px'},'Catatan keamanan: token dikunci (terenkripsi) dengan password TM. Gunakan password TM yang kuat dan jangan dibagikan di luar tim TM.')); })(),
       h('div',{class:'card x'},h('h3',{class:'sec-h'},'2. Akses Karyawan & Atasan (simpan otomatis)'),h('p',{class:'sub2'},'Token umum hanya untuk repo kotak masuk (private). Token dikunci dengan password masing-masing di data/cfg.json. Status: '+(ib?'aktif · '+ib.owner+'/'+ib.repo:'belum aktif')+'.'),
         h('div',{class:'grid3',style:'margin-top:10px'},f('Owner kotak masuk',a,'owner'),f('Repo kotak masuk',a,'repo'),f('Token umum (hanya repo kotak masuk)',a,'tok','password','github_pat_…'),f('Password karyawan (baru & existing)',a,'pe','text','karyawan'),f('Password atasan / user',a,'pm','text','user'),f('Password TM (konfirmasi)',a,'pa','password')),
         h('div',{class:'row',style:'margin-top:10px'},h('button',{class:'btn primary',id:'btn-acc-save',onclick:function(){ if(!a.tok||!a.pe||!a.pm||!a.pa){ res2.textContent='Isi token umum, kedua password, dan password TM.'; return; } res2.textContent='Memeriksa…';
           var ibr={owner:a.owner,repo:a.repo,branch:'main'}, salt=function(){ return Math.random().toString(36).slice(2)+Date.now().toString(36); }, se=salt(), sm=salt();
           ST.checkAdmin(a.pa).then(function(ok){ if(!ok) throw new Error('Password TM salah.'); return ST.testRepo(ibr,a.tok); })
             .then(function(){ return Promise.all([ST.hashPass(a.pe,se),ST.hashPass(a.pm,sm),ST.encWith(a.pe,a.tok),ST.encWith(a.pm,a.tok),ST.encWith(a.pa,a.tok)]); })
-            .then(function(x){ return ST.saveCfg(function(C){ C.v=2; C.inbox=ibr; C.r={emp:{hs:se,h:x[0],t:x[2]},mgr:{hs:sm,h:x[1],t:x[3]},admin:{t:x[4]}}; }); })
+            .then(function(x){ return ST.saveCfg(function(C){ C.v=2; C.inbox=ibr; var kk=C.r&&C.r.admin&&C.r.admin.k; C.r={emp:{hs:se,h:x[0],t:x[2]},mgr:{hs:sm,h:x[1],t:x[3]},admin:{t:x[4]}}; if(kk) C.r.admin.k=kk; }); })
             .then(function(){ ST.setInboxAdminTok(a.tok); res2.innerHTML='<span style="color:var(--good)">✓ Akses aktif. Karyawan: <b>'+esc(a.pe)+'</b> · Atasan: <b>'+esc(a.pm)+'</b>.</span>'; if(H()) ST.writeDir(MD.buildDir(H())).catch(function(){}); })
             .catch(function(e){ res2.innerHTML='<span style="color:var(--bad)">'+esc(e.message)+'</span>'; }); }},'Simpan akses'),
           h('button',{class:'btn ghost',onclick:function(){ if(!H()) return; ST.writeDir(MD.buildDir(H())).then(function(ok){ toast(ok?'Direktori nama diperbarui.':'Kotak masuk belum aktif.',!ok); }).catch(function(e){ toast(e.message,true); }); }},'Perbarui daftar nama')),res2),
-      h('div',{class:'card x'},h('h3',{class:'sec-h'},'3. Video penjelasan & cara pakai'),h('p',{class:'sub2'},'Tempel link YouTube, Microsoft Stream/SharePoint (link embed), atau file .mp4. Kosongkan bila belum ada.'),
-        h('div',{class:'grid2',style:'margin-top:10px'},f('Home · apa itu tools ini',V,'home'),f('Karyawan Baru',V,'emp'),f('Karyawan Existing',V,'emx'),f('User / Atasan',V,'mgr'),f('Talent Management',V,'tm')),
+      h('div',{class:'card x'},h('h3',{class:'sec-h'},'3. Video penjelasan (halaman utama)'),h('p',{class:'sub2'},'Satu video di halaman utama. Tempel link YouTube, Microsoft Stream/SharePoint (link embed), atau file .mp4. Kosongkan bila belum ada.'),
+        h('div',{class:'grid2',style:'margin-top:10px'},f('Link video',V,'home')),
         h('div',{class:'row',style:'margin-top:10px'},h('button',{class:'btn primary',id:'btn-vid-save',onclick:function(){ ST.saveCfg(function(C){ C.video=V; }).then(function(){ toast('Video disimpan.'); }).catch(function(e){ toast(e.message,true); }); }},'Simpan video'))),
       h('div',{class:'card x'},h('h3',{class:'sec-h'},'4. Backup & data lama'),h('div',{class:'row'},h('button',{class:'btn ghost',onclick:function(){ if(!H()) return; unduh('talenthub_backup_'+tgl()+'.json',JSON.stringify(H(),null,1),'application/json'); }},ic('down'),'Unduh backup'),h('button',{class:'btn ghost',onclick:restore},ic('up'),'Pulihkan dari backup'),
         h('button',{class:'btn ghost',onclick:function(){ if(!H()) return; save(function(X){ X.migrasiV1=null; },'Reset migrasi',false).then(function(){ return migrasi(); }).then(function(){ toast('Data Tools Competency lama dimigrasikan ulang.'); rer(); }); }},'Migrasi ulang data lama')))); }
