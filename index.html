@@ -4108,9 +4108,9 @@ var TM = (function(){
       h('div',{class:'row',style:'justify-content:flex-end'},h('button',{class:'btn primary',id:'btn-mst-save',onclick:function(){ save(function(X){ X.master.dept=D.dept; X.pos.forEach(function(p){ var d=D.dept.filter(function(x){ return x.nama===p.dept; })[0]; if(d){ p.divisi=d.divisi; p.segmen=d.segmen; p.entitas=d.entitas; } }); MD.logH(X,'Ubah master departemen'); },'Master departemen','Master disimpan & diterapkan ke posisi.'); }},'Simpan & terapkan'))); }
 
   /* ---------- Pengaturan ---------- */
-  var SET_SEC=[['akses','Penyimpanan & akses','shield'],['library','Library kompetensi','book'],['level','Daftar level & target','list'],['teknis','Kompetensi teknis','work'],['backup','Backup & pulihkan','down']];
+  var SET_SEC=[['akses','Penyimpanan & akses','shield'],['library','Library kompetensi','book'],['level','Daftar level & target','list'],['teknis','Kompetensi teknis','work'],['lms','Peserta LMS','users'],['backup','Backup & pulihkan','down']];
   function vSet(){ var sec=st.setSec||'akses', ctx={rer:rer,H:H,save:save,depts:H()?((H().master&&H().master.dept)||[]).map(function(x){ return x.nama; }):[]};
-    var body=sec==='akses'?vSetAkses():!H()&&sec!=='library'&&sec!=='level'&&sec!=='teknis'?h('div',{class:'note'},'Hubungkan database dulu di Penyimpanan & akses.'):({library:setLibrary,level:setLevel,teknis:setTeknis,backup:setBackup})[sec](ctx);
+    var body=sec==='akses'?vSetAkses():!H()&&sec!=='library'&&sec!=='level'&&sec!=='teknis'?h('div',{class:'note'},'Hubungkan database dulu di Penyimpanan & akses.'):({library:setLibrary,level:setLevel,teknis:setTeknis,lms:setLms,backup:setBackup})[sec](ctx);
     return h('div',{class:'setwrap'},h('aside',{class:'setnav'},h('span',{class:'eyebrow'},'Pengaturan'),SET_SEC.map(function(t){ return h('button',{class:sec===t[0]?'on':'',id:'setnav-'+t[0],onclick:function(){ st.setSec=t[0]; rer(); }},ic(t[2]),t[1]); })),h('div',{class:'setbody'},body)); }
   function vSetAkses(){ var c=ST.cfg(), dr=ST.dataRepo(), ib=ST.inboxRepo(), V=JSON.parse(JSON.stringify(c.video||{})), o={tok:'',owner:dr.owner,repo:dr.repo,path:dr.path}, a={tok:'',owner:(ib&&ib.owner)||'trainingasiatop',repo:(ib&&ib.repo)||'tcinbox',pe:'',pm:'',pa:''}, res1=h('div',{class:'sub2'}), res2=h('div',{class:'sub2'});
     function f(l,obj,k,type,ph){ return h('div',{class:'field'},h('label',null,l),h('input',{class:'input',type:type||'text',value:obj[k]||'',placeholder:ph||'',oninput:function(e){ obj[k]=e.target.value; }})); }
@@ -4239,6 +4239,63 @@ function setBackup(ctx){ var D=ctx.H(), n=D?Object.keys(D.people||{}).length:0;
           modal('Pulihkan backup '+fmtTgl(o.at)+'?',function(tt){ return [h('p',null,'Database sekarang akan diganti dengan backup tanggal ',h('b',null,fmtTgl(o.at)),' ('+Object.keys(o.hub.people).length+' orang). Ini tidak bisa dibatalkan dari sini.'),konf,
             h('div',{class:'row',style:'justify-content:flex-end'},h('button',{class:'btn danger',id:'btn-restore-ok',onclick:function(){ if(konf.value.trim().toUpperCase()!=='PULIHKAN'){ toast('Ketik PULIHKAN untuk melanjutkan.',true); return; } tt(); ctx.save(function(X){ Object.keys(X).forEach(function(k){ delete X[k]; }); Object.keys(o.hub).forEach(function(k){ X[k]=o.hub[k]; }); MD.logH(X,'Pulihkan backup '+o.at); },'Pulihkan backup','Backup dipulihkan.'); }},'Pulihkan sekarang'))]; }); }); };
         inp.click(); }},ic('up'),'Pilih file backup…')))); }
+/* ---- section: Peserta LMS (sinkron dengan Learning Center lewat Full Backup) ---- */
+var LMSX={bk:null,plan:null,opt:{rename:true,reset:true},f:'',nama:''};
+function sha256hex(t){ return crypto.subtle.digest('SHA-256',new TextEncoder().encode(t)).then(function(b){ return Array.prototype.map.call(new Uint8Array(b),function(x){ return x.toString(16).padStart(2,'0'); }).join(''); }); }
+function lmsKata(n){ return String(n||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z\s]/g,' ').split(/\s+/).filter(Boolean); }
+function lmsUser(nama,used){ var w=lmsKata(nama); if(!w.length) return null; var first=w[0], rest=w.slice(1), base=first;
+  if(rest.length>=2) base+=rest.map(function(x){ return x[0]; }).join(''); else if(first.length<4&&rest.length) base+=rest[0][0];
+  var c=base+'ast', last=rest.length?rest[rest.length-1]:'', i=1;
+  while(used[c]){ if(i<last.length){ c=base+last.slice(1,++i)+'ast'; } else { c=base+(i-last.length+1)+'ast'; i++; } }
+  used[c]=1; return c; }
+function lmsPlan(bk,D,opt){ var L=(bk.data.people||[]).slice(), rows=MD.buildDir(D).filter(function(r){ return r.nama&&String(r.nama).trim(); }), byPid={};
+  rows.forEach(function(r){ if(r.pid) byPid[r.pid]=r; });
+  var pakai={}, hasil=[], used={};
+  function cocok(r){ var nk=String(r.nik||'').trim(), nn=MD.nrm(r.nama); for(var i=0;i<L.length;i++){ var p=L[i]; if(pakai[p.id]) continue; if(nk&&String(p.nik||'').trim()===nk) return p; }
+    for(var j=0;j<L.length;j++){ var q=L[j]; if(pakai[q.id]) continue; var qn=MD.nrm(q.nama||''); if(qn===nn||qn.indexOf(nn+' ')===0) return q; } return null; }
+  rows.sort(function(a,b){ return a.nama.localeCompare(b.nama); }).forEach(function(r){ var m=cocok(r); if(m) pakai[m.id]=1; hasil.push({r:r,m:m}); });
+  var luar=L.filter(function(p){ return !pakai[p.id]; }); luar.forEach(function(p){ if(p.username) used[String(p.username).toLowerCase()]=1; });
+  if(!opt.rename) hasil.forEach(function(x){ if(x.m&&x.m.username) used[String(x.m.username).toLowerCase()]=1; });
+  var roles=bk.data.roles||[], defRole=(roles.filter(function(x){ return /semua/i.test(x.name||''); })[0]||roles[0]||{}).id, now=new Date().toISOString();
+  hasil.forEach(function(x){ var r=x.r, m=x.m, lama=m?m.username:'', u=(m&&!opt.rename&&lama)?lama:lmsUser(r.nama,used)||('user'+String(r.nik||Math.random().toString(36).slice(2,6))+'ast');
+    var ats=r.ats?byPid[r.ats]:null, baruMasuk=r.doj&&(Date.now()-new Date(r.doj))<180*864e5;
+    var p=m?JSON.parse(JSON.stringify(m)):{id:'ps'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),active:true,roleId:defRole,tracks:baruMasuk?['onb','lc']:r.segmen==='Sales Area'?['sdp','lc']:['lc']};
+    Object.assign(p,{nama:r.nama,username:u,nik:String(r.nik||p.nik||''),jabatan:r.judul||p.jabatan||'',departemen:r.dept||p.departemen||'',divisi:r.divisi||p.divisi||'',level:r.level||'',entitas:String(r.entitas||'').toUpperCase(),segmen:r.segmen||'',atasan:ats?(ats.nama+' · '+ats.judul):'',doj:r.doj||'',sumber:'Competency Hub',sinkron:now});
+    x.p=p; x.status=!m?'baru':(lama&&lama.toLowerCase()!==u)?'ganti':'update'; x.lama=lama; });
+  luar.forEach(function(p){ hasil.push({p:JSON.parse(JSON.stringify(p)),m:p,status:'luar',lama:p.username}); });
+  return hasil; }
+function lmsSiapkan(plan,opt){ var now=new Date().toISOString();
+  return Promise.all(plan.map(function(x){ var p=x.p; if(!(opt.reset||x.status==='baru')||!p.username) return null; var salt=Math.random().toString(36).slice(2,12); return sha256hex(salt+'|lca|'+p.username).then(function(hh){ p.salt=salt; p.hash=hh; p.pw=p.username; p.pwChangedAt=now; }); })); }
+function setLms(ctx){ var box=h('div',{class:'stack',id:'lmsBox'});
+  function gambar(){ box.textContent=''; var P=LMSX.plan, n={baru:0,update:0,ganti:0,luar:0};
+    (P||[]).forEach(function(x){ n[x.status]++; });
+    add(box,h('div',{class:'card x'},h('h3',{class:'sec-h'},'Sinkron peserta Learning Center (LMS)'),h('p',{class:'sub2'},'Menyamakan daftar peserta LMS dengan database Competency Hub: nama, NIK, jabatan, departemen, divisi, level, entitas, dan atasan. Data peserta LMS tetap tersimpan di server LMS (Supabase); hub hanya menyiapkan file pemulihannya.'),
+      h('ol',{class:'steps-ol sm'},h('li',null,'Di admin LMS: menu Backup › ',h('b',null,'Unduh Full Backup'),'. Jangan ubah LMS sampai langkah 4 selesai.'),h('li',null,'Unggah file itu di sini, cek pratinjaunya.'),h('li',null,'Klik ',h('b',null,'Unduh backup LMS tersinkron'),'.'),h('li',null,'Di admin LMS: Backup › ',h('b',null,'Restore'),' file tersebut (LMS otomatis mengunduh backup kondisi sebelumnya).'),h('li',null,'Bagikan akun dari ',h('b',null,'Daftar akun (Excel)'),'. Login: username atau NIK, password = username.')),
+      h('div',{class:'row',style:'margin-top:10px;gap:14px'},h('label',{class:'row nowrap',style:'gap:6px'},h('input',{type:'checkbox',id:'lmsRename',checked:LMSX.opt.rename,onchange:function(e){ LMSX.opt.rename=e.target.checked; hitung(); }}),'Ganti semua username sesuai pola (nama depan + inisial + ast)'),
+        h('label',{class:'row nowrap',style:'gap:6px'},h('input',{type:'checkbox',id:'lmsReset',checked:LMSX.opt.reset,onchange:function(e){ LMSX.opt.reset=e.target.checked; gambar(); }}),'Reset semua password = username')),
+      h('div',{class:'row',style:'margin-top:12px'},h('button',{class:'btn primary',id:'btn-lms-file',onclick:pilih},ic('up'),LMSX.bk?'Ganti file backup LMS':'Unggah Full Backup LMS (.json)'),LMSX.nama?h('span',{class:'sub2'},LMSX.nama):null)));
+    if(!P) return;
+    add(box,h('div',{class:'card x',id:'lmsPreview'},h('div',{class:'row between'},h('div',null,h('h3',{class:'sec-h'},'Pratinjau ('+P.length+' akun)'),h('p',{class:'sub2'},n.baru+' baru · '+n.update+' diperbarui · '+n.ganti+' username berubah · '+n.luar+' tidak ada di database hub (tetap, '+(LMSX.opt.reset?'password direset':'tidak diubah')+')')),
+        h('div',{class:'row',style:'gap:6px'},h('button',{class:'btn primary sm',id:'btn-lms-json',onclick:unduhJson},ic('down'),'Unduh backup LMS tersinkron'),h('button',{class:'btn ghost sm',id:'btn-lms-akun',onclick:unduhAkun},ic('down'),'Daftar akun (Excel)'))),
+      n.ganti?noteBox('info','<b>'+n.ganti+' username berubah.</b> Riwayat progress & nilai quiz lama tercatat atas username lama, jadi di Rekap LMS akan tampil terpisah dari username baru. Matikan pilihan "Ganti semua username" bila ingin mempertahankan username lama.'):null,
+      h('div',{class:'row',style:'gap:6px;margin:8px 0'},[['','Semua'],['baru','Baru'],['ganti','Username berubah'],['update','Diperbarui'],['luar','Tidak di hub']].map(function(t){ return h('button',{class:'chipbtn'+(LMSX.f===t[0]?' on':''),onclick:function(){ LMSX.f=t[0]; gambar(); }},t[1]); })),
+      h('div',{class:'tblwrap',style:'max-height:60vh'},h('table',{class:'tbl',id:'lmsTbl'},h('thead',null,h('tr',null,['Nama','NIK','Username','Jabatan · Departemen','Status'].map(function(t){ return h('th',null,t); }))),
+        h('tbody',null,P.filter(function(x){ return !LMSX.f||x.status===LMSX.f; }).slice(0,400).map(function(x){ var p=x.p; return h('tr',null,h('td',null,h('b',null,p.nama)),h('td',{class:'mono'},p.nik||'–'),h('td',{class:'mono'},p.username,x.status==='ganti'?h('small',{class:'dim'},'dulu: '+x.lama):null),h('td',{class:'tiny'},[p.jabatan,p.departemen].filter(Boolean).join(' · ')),
+          h('td',null,h('span',{class:'chip '+({baru:'good',ganti:'warn',update:'blue',luar:'slate'})[x.status]},({baru:'Baru',ganti:'Username berubah',update:'Diperbarui',luar:'Tidak di hub'})[x.status]))); })))))); }
+  function hitung(){ if(!LMSX.bk) return gambar(); try{ LMSX.plan=lmsPlan(LMSX.bk,ctx.H(),LMSX.opt); }catch(e){ toast('Gagal membaca: '+e.message,true); LMSX.plan=null; } gambar(); }
+  function pilih(){ var inp=h('input',{type:'file',accept:'.json',style:'display:none',id:'lmsFile'}); document.body.appendChild(inp);
+    inp.onchange=function(){ var f=inp.files[0]; inp.remove(); if(!f) return; f.text().then(function(t){ var o=null; try{ o=JSON.parse(t); }catch(e){} if(!o||o.type!=='lca-backup'||!o.data||!Array.isArray(o.data.people)){ toast('Ini bukan Full Backup Learning Center.',true); return; } LMSX.bk=o; LMSX.nama=f.name+' · '+o.data.people.length+' peserta'; hitung(); }); };
+    inp.click(); }
+  function unduhJson(){ var plan=LMSX.plan; if(!plan) return; var btn=document.getElementById('btn-lms-json'); if(btn) btn.disabled=true;
+    lmsSiapkan(plan,LMSX.opt).then(function(){ var bk=JSON.parse(JSON.stringify(LMSX.bk)); bk.data.people=plan.map(function(x){ return x.p; }); bk.at=new Date().toISOString(); bk.by=(bk.by||'admin')+' + Competency Hub';
+      unduh('FullBackup_LCA_sinkron_CompetencyHub_'+bk.at.slice(0,10)+'.json',JSON.stringify(bk),'application/json'); toast('Backup LMS tersinkron diunduh. Restore di admin LMS.'); }).catch(function(e){ toast('Gagal: '+e.message,true); }).then(function(){ if(btn) btn.disabled=false; }); }
+  function unduhAkun(){ var plan=LMSX.plan; if(!plan) return; needExcelJS().then(function(EX){ var wb=new EX.Workbook(), ws=wb.addWorksheet('Akun LMS');
+      ws.columns=[{header:'Nama',width:32},{header:'NIK',width:14},{header:'Username',width:22},{header:'Password awal',width:22},{header:'Jabatan',width:36},{header:'Departemen',width:30},{header:'Entitas',width:12},{header:'Status',width:24}];
+      plan.forEach(function(x){ var p=x.p; ws.addRow([p.nama,p.nik||'',p.username,(LMSX.opt.reset||x.status==='baru')?p.username:'(tidak diubah)',p.jabatan||'',p.departemen||'',p.entitas||'',({baru:'Baru',ganti:'Username berubah (dulu '+x.lama+')',update:'Diperbarui',luar:'Tidak di database hub'})[x.status]]); });
+      ws.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}}; ws.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1F3A8A'}}; ws.views=[{state:'frozen',ySplit:1}]; ws.autoFilter={from:'A1',to:'H1'};
+      return wb.xlsx.writeBuffer(); }).then(function(buf){ var bl=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}), u=URL.createObjectURL(bl), a=h('a',{href:u,download:'Akun_LMS_'+new Date().toISOString().slice(0,10)+'.xlsx',style:'display:none'}); document.body.appendChild(a); a.click(); setTimeout(function(){ a.remove(); URL.revokeObjectURL(u); },800); }).catch(function(e){ toast(e.message,true); }); }
+  if(LMSX.bk&&ctx.H()) LMSX.plan=lmsPlan(LMSX.bk,ctx.H(),LMSX.opt);
+  gambar(); return box; }
 
 /* ===== Form Coaching (karyawan baru) — porting dari Tools Competency v1 ===== */
 var COACH = (function(){
