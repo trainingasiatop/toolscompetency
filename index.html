@@ -1110,7 +1110,7 @@ var LOGO = { asiatop: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAW8AAABUCAI
   };
 IC.home='<path d="M3.5 11.5L12 4.5l8.5 7"/><path d="M6 10v9.5h4.5V14h3v5.5H18V10"/>';
 var ENT = [{k:'asiatop',nama:'ASIATOP',pt:'PT ASIATOP'},{k:'asw',nama:'ASW Foods',pt:'PT ASW Foods'},{k:'inafood',nama:'INAFOOD',pt:'PT INAFOOD'}];
-var POS = ['Staff','Supervisor','Manager','Senior Manager','Division Head','General Manager','Director','President Director'];
+var POS = ['Staff','Supervisor','Manager','Senior Manager','Division Head','General Manager','Director','Managing Director'];
 var POS_AS = POS.slice(0,6);
 var BULAN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 var URG = ['Tinggi','Sedang','Rendah'];
@@ -1986,7 +1986,7 @@ var MD = (function(){
   function parseEnt(t){ t=' '+String(t||'').toUpperCase()+' '; if(/\bASW\b/.test(t)) return 'asw'; if(/\bINA\b|INAFOOD/.test(t)) return 'inafood'; return 'asiatop'; }
   function guessSeg(dept){ return /^NATIONAL SALES/i.test(String(dept||'').trim())?'Sales Area':'Head Office'; }
   function guessLevel(j){ var t=' '+String(j||'').toUpperCase().replace(/\./g,' ')+' ';
-    if(/SECRETARY|SEKRETARIS/.test(t)) return ['Staff',true]; if(/PRESIDENT DIRECTOR|PRESIDEN DIREKTUR|\bCEO\b/.test(t)) return ['President Director',false]; if(/\bDIRECTOR\b|\bDIREKTUR\b/.test(t)&&!/ASSISTANT|ASISTEN|\bOF\b/.test(t)) return ['Director',false]; var amb=/ACTING|ASSISTANT|\bASS?T\b|REGIONAL/.test(t);
+    if(/SECRETARY|SEKRETARIS/.test(t)) return ['Staff',true]; if(/PRESIDENT DIRECTOR|PRESIDEN DIREKTUR|MANAGING DIRECTOR|\bCEO\b/.test(t)) return ['Managing Director',false]; if(/\bDIRECTOR\b|\bDIREKTUR\b/.test(t)&&!/ASSISTANT|ASISTEN|\bOF\b/.test(t)) return ['Director',false]; var amb=/ACTING|ASSISTANT|\bASS?T\b|REGIONAL/.test(t);
     if(/GENERAL MANAGER|\bGM\b/.test(t)) return ['General Manager',amb]; if(/DIVISION HEAD|DIV HEAD|DIVHEAD|HEAD OF/.test(t)) return ['Division Head',true];
     if(/SENIOR MANAGER|SR MANAGER|\bNSM\b/.test(t)) return ['Senior Manager',true]; if(/MANAGER|\bASM\b|\bRSM\b|\bMGR\b/.test(t)) return ['Manager',amb];
     if(/SUPERVISOR|\bSPV\b|COORDINATOR|KOORDINATOR|TEAM LEADER|\bLEADER\b|\bCHIEF\b|KEPALA/.test(t)) return ['Supervisor',false];
@@ -3641,6 +3641,7 @@ var TM = (function(){
   function perluDir(p){ return MD.isBOD(p.judul)&&posIdx(p.level)<6; }
   function load(){ st.busy=true; st.err=null;
     ST.loadCfg(true).then(function(){ if(!ST.adminTok()) return null; return ST.loadHub(true); })
+      .then(function(d){ if(d&&d.pos.some(function(p){ return p.level==='President Director'; })) return ST.saveHub(function(X){ X.pos.forEach(function(p){ if(p.level==='President Director') p.level='Managing Director'; }); MD.logH(X,'Level President Director → Managing Director'); },'Managing Director').then(function(){ return d; }); return d; })
       .then(function(d){ if(d&&d.pos.some(perluDir)) return ST.saveHub(function(X){ X.pos.forEach(function(p){ if(perluDir(p)){ p.level='Director'; p.levelCek=false; if(!p.atasan) p.atasan='BOD'; } }); MD.logH(X,'Level Director untuk jabatan direktur'); },'Level Director'); return d; })
       .then(function(d){ if(d&&!d.migrasiV1) return migrasi(); if(d) return pull(); })
       .catch(function(e){ st.err=e.message==='no-token'?null:e.message; })
@@ -3736,7 +3737,7 @@ var TM = (function(){
       rows.push([per.nama,/^TMP-/.test(per.nik)?'':per.nik,p?p.judul:(per.judulLama||''),p?p.dept:(per.deptLama||''),p?p.divisi:'',p?ENTK[p.entitas]:'',per.doj||'',baruIsi?'Mengisi sendiri':asB?'Asesmen karyawan baru':'DOJ ≤ 4 bulan','','']); });
     if(rows.length<2){ toast('Belum ada karyawan baru (DOJ 4 bulan terakhir / asesmen karyawan baru).'); return; }
     unduhXlsx('Karyawan_Baru_Akun_LMS_'+tgl()+'.xlsx',[{name:'Karyawan baru',rows:rows}]); toast((rows.length-1)+' karyawan baru diekspor.'); }
-  function atsCols(D,p){ var a=MD.atasanOf(D,p); return [p.atasan||'',p.atasan==='BOD'?'President Director':(a?a.judul:''),a&&a.holder?a.holder.nama:(a?'Vacant':'')]; }
+  function atsCols(D,p){ var a=MD.atasanOf(D,p); return [p.atasan||'',p.atasan==='BOD'?'Managing Director':(a?a.judul:''),a&&a.holder?a.holder.nama:(a?'Vacant':'')]; }
   function tambahPos(){ var D=H(), o={judul:'',dept:'',divisi:D.master.divisi[0],entitas:'asiatop',segmen:'Head Office',level:'Staff'}, tutup;
     tutup=modal('Posisi baru',[posForm(o),h('button',{class:'btn primary',onclick:function(){ if(!o.judul.trim()||!o.dept.trim()){ toast('Isi nama posisi dan departemen.',true); return; } tutup(); save(function(X){ var p=MD.createPos(X,o); p.level=o.level; p.levelCek=false; p.divisi=o.divisi; p.segmen=o.segmen; p.entitas=o.entitas; MD.logH(X,'Posisi baru '+p.id+' '+p.judul); },'Posisi baru','Posisi ditambahkan.'); }},'Simpan posisi')]); }
   function posForm(o){ var D=H(), dl=h('datalist',{id:'deptlist'},D.master.dept.map(function(d){ return h('option',{value:d.nama}); }));
@@ -3938,9 +3939,9 @@ var TM = (function(){
 
 
   /* ---------- Struktur organisasi (atasan langsung) ---------- */
-  function atsLabel(D,p){ if(!p||!p.atasan) return ''; if(p.atasan==='BOD') return 'President Director'; var a=MD.atasanOf(D,p); return a?((a.holder?a.holder.nama:'Vacant')+' · '+a.judul):p.atasan+' (tidak ada)'; }
+  function atsLabel(D,p){ if(!p||!p.atasan) return ''; if(p.atasan==='BOD') return 'Managing Director'; var a=MD.atasanOf(D,p); return a?((a.holder?a.holder.nama:'Vacant')+' · '+a.judul):p.atasan+' (tidak ada)'; }
   function posOpt(q){ return q.id+' · '+q.judul+' · '+(q.holder?q.holder.nama:'Vacant'); }
-  function atasanField(D,p,o){ var dl=h('datalist',{id:'poslist-'+p.id},h('option',{value:'BOD'},'President Director'),D.pos.filter(function(q){ return q.id!==p.id; }).map(function(q){ return h('option',{value:posOpt(q)}); }));
+  function atasanField(D,p,o){ var dl=h('datalist',{id:'poslist-'+p.id},h('option',{value:'BOD'},'Managing Director'),D.pos.filter(function(q){ return q.id!==p.id; }).map(function(q){ return h('option',{value:posOpt(q)}); }));
     var cur=o.atasan==='BOD'?'BOD':(MD.posById(D,o.atasan)?posOpt(MD.posById(D,o.atasan)):o.atasan);
     return h('div',{class:'field',style:'margin-top:10px'},h('label',null,'Atasan langsung (ketik nama / posisi / POS ID, atau BOD)'),dl,h('input',{class:'input',id:'atsInput',list:'poslist-'+p.id,value:cur||'',placeholder:'Belum diisi',oninput:function(e){ o.atasan=e.target.value; }})); }
   function strukturMini(D,p){ var ch=MD.rantai(D,p).reverse(), sub=MD.bawahan(D,p.id), tim=MD.timSemua(D,p.id);
@@ -3953,7 +3954,7 @@ var TM = (function(){
   function vOrg(){ var D=H(), P=D.pos, f=st.org=st.org||{div:'',q:'',open:{},sub:'tree',edit:false,buf:{}}, ids={}, kids={};
     f.buf=f.buf||{}; if(!f.sub) f.sub='tree';
     var subTabs=h('div',{class:'tabs2 show'},[['tree','Pohon struktur'],['master','Divisi & departemen']].map(function(t){ return h('button',{class:f.sub===t[0]?'on':'',id:'orgsub-'+t[0],onclick:function(){ f.sub=t[0]; rer(); }},t[1]); }));
-    var head=h('div',{class:'pagehead row between'},h('div',null,h('span',{class:'eyebrow'},'Struktur & Master'),h('h1',null,f.sub==='master'?'Divisi & departemen':'Struktur organisasi'),h('p',null,f.sub==='master'?'Atur divisi, area, dan entitas per departemen. Perubahan diterapkan ke semua posisi di departemen tersebut.':'Berbasis posisi. Puncaknya President Director (rahasia). Klik Mode edit untuk mengubah atasan, jabatan, dan level langsung di pohon.')),
+    var head=h('div',{class:'pagehead row between'},h('div',null,h('span',{class:'eyebrow'},'Struktur & Master'),h('h1',null,f.sub==='master'?'Divisi & departemen':'Struktur organisasi'),h('p',null,f.sub==='master'?'Atur divisi, area, dan entitas per departemen. Perubahan diterapkan ke semua posisi di departemen tersebut.':'Berbasis posisi. Puncaknya Managing Director. Klik Mode edit untuk mengubah atasan, jabatan, dan level langsung di pohon.')),
       f.sub==='tree'?h('div',{class:'row'},h('button',{class:'btn '+(f.edit?'primary':'soft'),id:'btn-org-edit',onclick:function(){ f.edit=!f.edit; f.buf={}; rer(); }},ic('pencil'),f.edit?'Selesai edit':'Mode edit'),h('button',{class:'btn ghost',onclick:impStruktur},ic('up'),'Import'),h('button',{class:'btn ghost',onclick:eksporOrg},ic('down'),'Excel')):null);
     if(f.sub==='master') return h('div',{class:'stack'},head,subTabs,mstBody());
     P.forEach(function(p){ ids[p.id]=p; });
@@ -3965,7 +3966,7 @@ var TM = (function(){
     var akar=lepas.filter(function(p){ return kids[p.id]; }), sendiri=lepas.filter(function(p){ return !kids[p.id]; });
     var q=MD.nrm(f.q), cocok=function(p){ return MD.nrm([p.id,p.judul,p.dept,p.divisi,p.holder&&p.holder.nama,p.holder&&p.holder.nik].join(' ')).indexOf(q)>=0; };
     var memo={}; function ada(p){ if(memo[p.id]!=null) return memo[p.id]; memo[p.id]=false; var r=(!f.div||p.divisi===f.div)&&(!q||cocok(p)); if(!r) r=(kids[p.id]||[]).some(ada); return memo[p.id]=r; }
-    var dl=f.edit?h('datalist',{id:'poslistAll'},h('option',{value:'BOD'},'President Director'),P.map(function(x){ return h('option',{value:posOpt(x)}); })):null;
+    var dl=f.edit?h('datalist',{id:'poslistAll'},h('option',{value:'BOD'},'Managing Director'),P.map(function(x){ return h('option',{value:posOpt(x)}); })):null;
     function setBuf(p,k,v){ var b=f.buf[p.id]=f.buf[p.id]||{}; b[k]=v; if(String(v)===String(k==='atasan'?(p.atasan||''):p[k])) delete b[k]; if(!Object.keys(b).length) delete f.buf[p.id]; barU(); }
     function editCtl(p){ var b=f.buf[p.id]||{}, a=atsOf(p);
       return h('div',{class:'oedit'},h('input',{class:'input sm',title:'Nama jabatan',value:b.judul!=null?b.judul:p.judul,onchange:function(e){ setBuf(p,'judul',e.target.value.trim()||p.judul); }}),
@@ -3980,7 +3981,7 @@ var TM = (function(){
           f.edit?editCtl(p):[h('span',{class:'chip '+(p.levelCek?'warn':'slate')},p.level),ch.length?h('span',{class:'chip blue'},MD.timSemua(D,p.id).length+' tim'):null,!p.atasan?h('span',{class:'chip warn'},'Atasan ?'):null]),
         op&&ch.length?h('div',{class:'okids'},ch.map(function(c){ return node(c,d+1); })):null); }
     var pdOpen=f.open.__pd!=null?f.open.__pd:true;
-    var pdNode=h('div',{class:'onode'},h('div',{class:'orow pd'},h('button',{class:'otog',onclick:function(){ f.open.__pd=!pdOpen; rer(); }},pdOpen?'−':'+'),h('span',{class:'oname'},h('span',{class:'ava sm',style:'background:#0B1B3F;color:#FFC83D'},ic('shield')),h('span',null,h('b',null,'President Director'),h('small',null,'Nama dirahasiakan (confidential)'))),h('span',{class:'chip dark'},'President Director'),h('span',{class:'chip blue'},bod.length+' langsung')),
+    var pdNode=h('div',{class:'onode'},h('div',{class:'orow pd'},h('button',{class:'otog',onclick:function(){ f.open.__pd=!pdOpen; rer(); }},pdOpen?'−':'+'),h('span',{class:'oname'},h('span',{class:'ava sm',style:'background:#0B1B3F;color:#FFC83D'},ic('shield')),h('span',null,h('b',null,'Managing Director'))),h('span',{class:'chip dark'},'Managing Director'),h('span',{class:'chip blue'},bod.length+' langsung')),
       pdOpen?h('div',{class:'okids'},bod.filter(ada).map(function(c){ return node(c,1); })):null);
     var qi=h('input',{class:'input',placeholder:'Cari nama, NIK, posisi, departemen…',value:f.q,id:'orgSearch'}), t=null;
     qi.addEventListener('input',function(){ clearTimeout(t); t=setTimeout(function(){ f.q=qi.value; rer(); var n=$('#orgSearch'); if(n){ n.focus(); n.setSelectionRange(n.value.length,n.value.length); } },250); });
@@ -3989,7 +3990,7 @@ var TM = (function(){
       add(bar,h('span',null,h('b',null,n+' posisi'),' diubah, belum disimpan.'),h('button',{class:'btn ghost sm',onclick:function(){ f.buf={}; rer(); }},'Batal'),h('button',{class:'btn primary sm',id:'btn-org-save',onclick:function(){ var B=f.buf; save(function(X){ Object.keys(B).forEach(function(id){ var q2=MD.posById(X,id); if(!q2) return; var b=B[id]; if(b.judul) q2.judul=b.judul; if(b.level){ q2.level=b.level; q2.levelCek=false; } if(b.atasan!=null) MD.setAtasan(X,id,b.atasan); }); MD.logH(X,'Edit struktur langsung: '+Object.keys(B).length+' posisi'); },'Edit struktur','Perubahan struktur disimpan.').then(function(){ f.buf={}; rer(); }); }},ic('check'),'Simpan perubahan')); }
     barU();
     return h('div',{class:'stack'},head,subTabs,dl,
-      h('div',{class:'kpis k4'},kpi(punya,'Punya atasan','good'),kpi(bod.length,'Langsung ke President Director'),kpi(lepas.length,'Atasan belum diisi',lepas.length?'bad':null),kpi(P.filter(function(p){ var x=MD.penilaiOf(D,p); return p.holder&&x&&!x.holder; }).length,'Penilainya Vacant','warn')),
+      h('div',{class:'kpis k4'},kpi(punya,'Punya atasan','good'),kpi(bod.length,'Langsung ke Managing Director'),kpi(lepas.length,'Atasan belum diisi',lepas.length?'bad':null),kpi(P.filter(function(p){ var x=MD.penilaiOf(D,p); return p.holder&&x&&!x.holder; }).length,'Penilainya Vacant','warn')),
       h('div',{class:'filters'},qi,h('select',{class:'select sm',onchange:function(e){ f.div=e.target.value; rer(); }},h('option',{value:''},'Semua divisi'),D.master.divisi.map(function(v){ return h('option',{value:v,selected:f.div===v?true:null},v); })),
         h('button',{class:'btn link sm',onclick:function(){ P.forEach(function(p){ if(kids[p.id]) f.open[p.id]=true; }); rer(); }},'Buka semua'),h('button',{class:'btn link sm',onclick:function(){ P.forEach(function(p){ if(kids[p.id]) f.open[p.id]=false; }); rer(); }},'Tutup semua')),
       f.edit?noteBox('info','<b>Mode edit aktif.</b> Ubah nama jabatan, level, atau atasan langsung di setiap baris, lalu klik <b>Simpan perubahan</b> di bawah. Tombol <b>+ Bawahan</b> menambah posisi baru; posisi kosong tanpa bawahan bisa dihapus.'):null,
@@ -4189,7 +4190,7 @@ function setLibrary(ctx){ var umum=KAMUS.filter(function(k){ return !k.teknis; }
     h('div',{class:'note'},'Kamus gejala untuk TNA (bahasa sehari-hari manager) masih mengikuti kamus TNA 2027 dan akan diselaraskan setelah kamus disepakati.')); }
 /* ---- section: daftar level ---- */
 function setLevel(ctx){ var M={}, ubah=0; KAMUS.forEach(function(k){ M[k.code]=k.matrix.slice(0,6); });
-  var info=[['Staff','Pelaksana'],['Supervisor','Mengawasi tim kecil / koordinator'],['Manager','Memimpin departemen / area; penilai asesmen'],['Senior Manager','Memimpin beberapa departemen'],['Division Head','Memimpin divisi'],['General Manager','Memimpin unit bisnis'],['Director','Dewan direksi (tidak dinilai di matriks)'],['President Director','Puncak struktur (nama dirahasiakan)']];
+  var info=[['Staff','Pelaksana'],['Supervisor','Mengawasi tim kecil / koordinator'],['Manager','Memimpin departemen / area; penilai asesmen'],['Senior Manager','Memimpin beberapa departemen'],['Division Head','Memimpin divisi'],['General Manager','Memimpin unit bisnis'],['Director','Dewan direksi (tidak dinilai di matriks)'],['Managing Director','Puncak struktur']];
   var save=h('button',{class:'btn primary',id:'btn-lv-save',disabled:true,onclick:function(){ libSimpan(function(X){ Object.keys(M).forEach(function(c){ var k=KAMUS.filter(function(x){ return x.code===c; })[0]; if(!k||JSON.stringify(k.matrix.slice(0,6))===JSON.stringify(M[c])) return; if(k.teknis){ X.baru.forEach(function(b){ if(b.code===c) b.matrix=M[c]; }); } else { X.ubah[c]=X.ubah[c]||{}; X.ubah[c].matrix=M[c]; } }); },'Target level tersimpan.',ctx.rer); }},'Simpan target level');
   return h('div',{class:'stack'},h('div',{class:'card x'},h('h3',{class:'sec-h'},'Daftar level jabatan'),h('p',{class:'sub2'},'Urutan level yang dipakai di database, struktur, asesmen, IDP, dan TNA. Penilai asesmen minimal level Manager.'),
       h('div',{class:'tblwrap'},h('table',{class:'tbl'},h('thead',null,h('tr',null,['#','Level','Keterangan','Dinilai di matriks'].map(function(t){ return h('th',null,t); }))),h('tbody',null,POS.map(function(p,i){ var x=info.filter(function(z){ return z[0]===p; })[0]; return h('tr',null,h('td',{class:'mono'},i+1),h('td',null,h('b',null,p)),h('td',{class:'sub2'},x?x[1]:''),h('td',null,i<6?h('span',{class:'chip good'},'Ya'):h('span',{class:'chip slate'},'Tidak'))); })))),
