@@ -979,6 +979,14 @@ details.grp+details.grp{margin-top:0}
 #idpSaveBar .btn.ghost{color:#fff;border-color:rgba(255,255,255,.35);background:transparent}
 #idpSaveBar .btn.soft{background:rgba(255,255,255,.14);color:#fff}
 #idpSaveBar small{color:#b9c6e6}
+/* konfirmasi atasan langsung */
+.atspick{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
+.atspick.perlu select,.atspick.perlu input{border-color:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,.18);background:#fffbeb}
+.atsguide{display:flex;gap:10px;align-items:flex-start;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:10px 12px;font-size:13.5px}
+.atsguide ul{margin:4px 0 4px 18px;padding:0}.atsguide li{margin:1px 0}
+.addrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 10px;border:1px solid var(--line,#e3e8f2);border-radius:12px;background:#fff}
+.addrow .grow{display:flex;flex-direction:column;min-width:200px;flex:1}
+.warntxt{color:#b45309}
 
 </style>
 </head>
@@ -1842,7 +1850,12 @@ var MD = (function(){
   function applyTim(H,p){ H.timLog=H.timLog||[]; if(H.timLog.some(function(e){ return e.id===p.id; })) return;
     var E={id:p.id,at:p.at||new Date().toISOString(),oleh:p.oleh||{},konfirmasi:!!p.konfirmasi,ch:[],dicek:false,batal:false}, me=p.oleh&&p.oleh.pid;
     function snap(q){ return {atasan:q.atasan||'',judul:q.judul,dept:q.dept,level:q.level}; }
-    (p.tambah||[]).forEach(function(t){ var per=t.nik?H.people[String(t.nik).trim()]:null, q=per&&per.pos?posById(H,per.pos):null, ats=t.ats&&posById(H,t.ats)?t.ats:me;
+    var vacMap={};
+    function atsVac(t,dept){ var v=t.vac||{}, j=String(v.judul||'').trim()||'Supervisor (Vacant)', lv=POS.indexOf(v.level)>=0?v.level:'Supervisor', k=j.toLowerCase(); if(vacMap[k]) return vacMap[k];
+      var ex=(H.pos||[]).filter(function(x){ return !x.holder&&x.atasan===me&&String(x.judul).toLowerCase()===k; })[0]; if(ex) return (vacMap[k]=ex.id);
+      var md=posById(H,me), np=createPos(H,{judul:j,dept:dept||(md&&md.dept)||'Lainnya',level:lv}); try{ if(me) setAtasan(H,np.id,me); }catch(e){}
+      E.ch.push({t:'vacant',nama:np.judul,pid:np.id,after:{atasan:me,judul:np.judul,level:np.level}}); return (vacMap[k]=np.id); }
+    (p.tambah||[]).forEach(function(t){ var per=t.nik?H.people[String(t.nik).trim()]:null, q=per&&per.pos?posById(H,per.pos):null, ats=t.ats==='VAC'?atsVac(t,(q&&q.dept)||t.dept):t.ats&&posById(H,t.ats)?t.ats:me;
       if(q){ var b=snap(q); try{ setAtasan(H,q.id,ats); E.ch.push({t:'tambah',nik:per.nik,nama:per.nama,pid:q.id,before:b,after:{atasan:ats}}); }catch(e){ E.ch.push({t:'gagal',nama:t.nama,ket:e.message}); } return; }
       if(t.nik&&String(t.nik).trim()){ var np=createPos(H,{judul:t.judul||'Posisi baru',dept:t.dept||'Lainnya',level:POS.indexOf(t.level)>=0?t.level:null}); np.levelCek=POS.indexOf(t.level)<0;
         var pr=ensurePerson(H,{nik:String(t.nik).trim(),nama:t.nama}); if(t.doj&&!pr.doj) pr.doj=t.doj; assign(H,np.id,pr,t.doj||''); try{ setAtasan(H,np.id,ats); }catch(e){}
@@ -1858,6 +1871,7 @@ var MD = (function(){
     H.timLog.unshift(E); if(H.timLog.length>400) H.timLog.length=400; return E; }
   function revertTim(H,id){ var E=(H.timLog||[]).filter(function(e){ return e.id===id; })[0]; if(!E||E.batal) return;
     E.ch.slice().reverse().forEach(function(c){ var q=c.pid?posById(H,c.pid):null;
+      if(c.t==='vacant'&&q){ if(!q.holder){ H.pos=H.pos.filter(function(x){ return x.id!==q.id; }); (H.pos||[]).forEach(function(x){ if(x.atasan===q.id) x.atasan=''; }); } return; }
       if(c.t==='baru'&&q){ var per=H.people[c.nik]; if(per&&!(per.asesmen||[]).length&&!(per.idp||[]).length){ delete H.people[c.nik]; } else if(per){ per.pos=null; per.tanpaPosisi=true; }
         H.pos=H.pos.filter(function(x){ return x.id!==q.id; }); (H.pos||[]).forEach(function(x){ if(x.atasan===q.id) x.atasan=''; }); return; }
       if(!q||!c.before) return; if('atasan' in c.before) q.atasan=c.before.atasan; ['judul','dept','level'].forEach(function(k){ if(c.before[k]!=null) q[k]=c.before[k]; });
@@ -2296,22 +2310,34 @@ VIEWS.mpick=function(){ var multi={}, multiBar=h('div',{class:'multibar',id:'mul
   if(!S.oleh&&ST.ss('th_me')){ try{ var M=JSON.parse(ST.ss('th_me')); S.oleh=M.n; S.olehPid=M.p; S.olehNik=M.k; me.value=M.n; }catch(e){} }
   me.addEventListener('input',function(){ if(MD.nrm(me.value)!==MD.nrm(S.oleh||'')){ S.oleh=me.value; S.olehPid=''; S.olehNik=''; saveS(); meBox.textContent=''; gambar(); } meCari(); });
   function overlayTim(L,p){ var me=p.oleh&&p.oleh.pid, me2=(L.filter(function(x){ return x.pid===me; })[0])||{}, pn=MD.mgrUp(me2.level)?me:(me2.pn||me);
-    (p.tambah||[]).forEach(function(t){ var d=t.nik&&L.filter(function(x){ return x.nik===t.nik; })[0]; if(d){ d.ats=t.ats||me; d.pn=pn; return; } if(t.nik) L.push({pid:null,nik:t.nik,nama:t.nama,judul:t.judul||'',dept:t.dept||'',level:t.level||'Staff',entitas:'asiatop',segmen:'',doj:t.doj||'',ats:t.ats||me,pn:pn,as:null}); });
+    (p.tambah||[]).forEach(function(t){ var d=t.nik&&L.filter(function(x){ return x.nik===t.nik; })[0]; if(d){ d.ats=t.ats&&t.ats!=='VAC'?t.ats:me; d.pn=pn; return; } if(t.nik) L.push({pid:null,nik:t.nik,nama:t.nama,judul:t.judul||'',dept:t.dept||'',level:t.level||'Staff',entitas:'asiatop',segmen:'',doj:t.doj||'',ats:t.ats&&t.ats!=='VAC'?t.ats:me,pn:pn,as:null}); });
     (p.kurang||[]).forEach(function(t){ var d=L.filter(function(x){ return x.nik===t.nik; })[0]; if(d){ d.ats=''; d.pn=null; } });
     (p.ubah||[]).forEach(function(t){ var d=L.filter(function(x){ return x.nik===t.nik; })[0]; if(d) ['nama','judul','dept','level'].forEach(function(k){ if(t[k]) d[k]=t[k]; }); }); }
   function cekTim(){ var T=timKu(), me=S.olehPid, dr={tambah:{},kurang:{},ubah:{},baru:[]}, box=h('div',{class:'stack'}), tutup;
     var anggota=list.filter(function(d){ return T[d.nik]; }).sort(function(a,b){ return (T[a.nik]==='L'?0:1)-(T[b.nik]==='L'?0:1)||a.nama.localeCompare(b.nama); });
-    function opsiAtasan(kecuali){ return [{v:me,l:'Saya ('+S.oleh+')'}].concat(anggota.filter(function(d){ return d.nik!==kecuali&&d.pid&&posIdx(d.level)>=1&&!dr.kurang[d.nik]; }).map(function(d){ return {v:d.pid,l:d.nama+' · '+d.judul}; })); }
-    function selAts(val,kecuali,cb){ var o=opsiAtasan(kecuali); return h('select',{class:'select sm',onchange:function(e){ cb(e.target.value); }},o.map(function(x){ return h('option',{value:x.v,selected:x.v===val?true:null},x.l); })); }
+    function opsiAtasan(kecuali,wajib){ var spv=anggota.filter(function(d){ return d.nik!==kecuali&&d.pid&&posIdx(d.level)>=1&&!dr.kurang[d.nik]; }).map(function(d){ return {v:d.pid,l:d.nama+' · '+d.judul+' ('+d.level+')'}; });
+      return (wajib?[{v:'',l:'— Pilih atasan langsungnya —'}]:[]).concat([{v:me,l:wajib?'Langsung ke saya ('+S.oleh+')':'Langsung ke saya'}]).concat(spv).concat([{v:'VAC',l:'Atasan langsungnya VACANT (posisi kosong)'}]); }
+    /* o = {ats, vac:{judul,level}}; atasan langsung wajib dikonfirmasi (struktur saja; penilai asesmen tetap Manager ke atas) */
+    function pickAts(o,kecuali,dept,wajib,cb){ var w=h('span',{class:'atspick'});
+      function g(){ w.textContent=''; w.className='atspick'+(wajib&&(!o.ats||(o.ats==='VAC'&&!String((o.vac||{}).judul||'').trim()))?' perlu':'');
+        add(w,h('select',{class:'select sm','aria-label':'Atasan langsung',onchange:function(e){ o.ats=e.target.value; if(o.ats==='VAC'&&!o.vac) o.vac={judul:'Supervisor '+(dept||''),level:'Supervisor'}; g(); if(cb) cb(); }},opsiAtasan(kecuali,wajib).map(function(x){ return h('option',{value:x.v,selected:x.v===(o.ats||'')?true:null},x.l); })),
+          o.ats==='VAC'?h('span',{class:'row nowrap',style:'gap:6px'},h('input',{class:'input sm',style:'min-width:220px',placeholder:'Jabatan atasan yang kosong, mis. Supervisor Sales Jatim',value:o.vac.judul,oninput:function(e){ o.vac.judul=e.target.value; if(cb) cb(); }}),sel_(lvVac(),o.vac.level,function(v){ o.vac.level=v; })):null); }
+      g(); return w; }
+    function selAts(val,kecuali,cb){ var o={ats:val}; return pickAts(o,kecuali,'',false,function(){ cb(o.ats,o); }); }
+    function lvVac(){ var md=list.filter(function(x){ return x.pid===me; })[0], L=POS_AS.slice(1,Math.max(2,posIdx((md&&md.level)||'Manager'))); return L.length?L:['Supervisor']; }
+    function belumAts(){ var n=0; Object.keys(dr.tambah).forEach(function(k){ var x=dr.tambah[k]; if(!x.ats||(x.ats==='VAC'&&!String((x.vac||{}).judul||'').trim())) n++; }); dr.baru.forEach(function(x){ if(!x.ats||(x.ats==='VAC'&&!String((x.vac||{}).judul||'').trim())) n++; }); return n; }
+    var panduanAts=h('div',{class:'atsguide'},ic('info'),h('div',null,h('b',null,'Wajib: konfirmasi atasan langsung setiap orang yang ditambahkan.'),h('ul',null,
+      h('li',null,'Staff di bawah Supervisor → pilih nama Supervisor-nya.'),h('li',null,'Posisi Supervisor-nya sedang kosong → pilih ',h('b',null,'VACANT'),' dan tulis nama jabatannya.'),h('li',null,'Memang langsung di bawah Anda → pilih ',h('b',null,'Langsung ke saya'),'.')),
+      h('small',{class:'dim'},'Ini hanya untuk struktur organisasi. Yang mengisi asesmen tetap minimal level Manager (Anda), walaupun atasan langsungnya Supervisor.')));
     function nUbah(){ return Object.keys(dr.tambah).length+Object.keys(dr.kurang).length+Object.keys(dr.ubah).length+dr.baru.length; }
     var cari=h('input',{class:'input',id:'timAddSearch',placeholder:'Cari nama / NIK karyawan untuk ditambahkan…',autocomplete:'off'}), sug=h('div',{class:'suglist'});
     cari.addEventListener('input',function(){ var t=MD.nrm(cari.value); sug.textContent=''; if(t.length<2) return;
-      list.filter(function(d){ return !T[d.nik]&&!dr.tambah[d.nik]&&d.nik!==S.olehNik&&(MD.nrm(d.nama).indexOf(t)>=0||String(d.nik||'').indexOf(cari.value.trim())===0); }).slice(0,6).forEach(function(d){ add(sug,h('button',{class:'sugitem',onclick:function(){ dr.tambah[d.nik]={nik:d.nik,nama:d.nama,judul:d.judul,ats:me}; cari.value=''; sug.textContent=''; gambarT(); }},ava(d.nama,true),h('span',null,h('b',null,d.nama),h('small',null,[d.judul,d.dept,d.pnN?'penilai sekarang: '+d.pnN:''].filter(Boolean).join(' · '))))); }); });
-    var nb={nama:'',nik:'',judul:'',dept:'',level:'Staff',doj:'',ats:me};
+      list.filter(function(d){ return !T[d.nik]&&!dr.tambah[d.nik]&&d.nik!==S.olehNik&&(MD.nrm(d.nama).indexOf(t)>=0||String(d.nik||'').indexOf(cari.value.trim())===0); }).slice(0,6).forEach(function(d){ add(sug,h('button',{class:'sugitem',onclick:function(){ dr.tambah[d.nik]={nik:d.nik,nama:d.nama,judul:d.judul,dept:d.dept,level:d.level,ats:''}; cari.value=''; sug.textContent=''; gambarT(); }},ava(d.nama,true),h('span',null,h('b',null,d.nama),h('small',null,[d.judul,d.dept,d.pnN?'penilai sekarang: '+d.pnN:''].filter(Boolean).join(' · '))))); }); });
+    var nb={nama:'',nik:'',judul:'',dept:'',level:'Staff',doj:'',ats:''};
     function fld(l,k,ph,type){ return h('div',{class:'field'},h('label',null,l),h('input',{class:'input',type:type||'text',placeholder:ph||'',oninput:function(e){ nb[k]=e.target.value; }})); }
     var fBaru=h('details',{class:'card x',style:'padding:12px 14px'},h('summary',null,h('b',null,'+ Orang baru (belum ada di daftar)')),
       h('div',{class:'grid3',style:'margin-top:10px'},fld('Nama lengkap','nama'),fld('NIK (bila ada)','nik'),fld('Posisi / jabatan','judul'),fld('Departemen','dept'),h('div',{class:'field'},h('label',null,'Level'),sel_(POS_AS,nb.level,function(v){ nb.level=v; })),fld('Tanggal bergabung','doj','','date')),
-      h('div',{class:'row',style:'margin-top:8px'},h('div',{class:'field'},h('label',null,'Atasan langsung'),selAts(me,null,function(v){ nb.ats=v; })),h('button',{class:'btn soft',id:'btn-tim-baru',style:'align-self:flex-end',onclick:function(){ if(!nb.nama.trim()||!nb.judul.trim()){ toast('Isi nama dan posisi.',true); return; } dr.baru.push(JSON.parse(JSON.stringify(nb))); toast('Ditambahkan ke daftar perubahan.'); gambarT(); }},ic('plus'),'Tambahkan')));
+      h('div',{class:'row',style:'margin-top:8px'},h('div',{class:'field'},h('label',null,'Atasan langsung (wajib)'),pickAts(nb,null,'',true)),h('button',{class:'btn soft',id:'btn-tim-baru',style:'align-self:flex-end',onclick:function(){ if(!nb.nama.trim()||!nb.judul.trim()){ toast('Isi nama dan posisi.',true); return; } if(!nb.ats||(nb.ats==='VAC'&&!String((nb.vac||{}).judul||'').trim())){ toast('Pilih atasan langsungnya dulu (Supervisor, VACANT, atau langsung ke Anda).',true); return; } dr.baru.push(JSON.parse(JSON.stringify(nb))); toast('Ditambahkan ke daftar perubahan.'); gambarT(); }},ic('plus'),'Tambahkan')));
     var ringkas=h('div',null), btnK=h('button',{class:'btn primary',id:'btn-tim-kirim'},'Kirim perubahan tim',ic('right'));
     function gambarT(){ box.textContent='';
       add(box,h('p',{class:'sub2'},'Cek apakah daftar ini sudah sesuai. Ubah atasan langsung, perbaiki nama/posisi/level, keluarkan yang bukan tim Anda, atau tambahkan anggota. Perubahan langsung dipakai di daftar Anda dan dicatat untuk tim TM.'));
@@ -2323,17 +2349,17 @@ VIEWS.mpick=function(){ var multi={}, multiBar=h('div',{class:'multibar',id:'mul
             h('td',null,ed?h('input',{class:'input sm',value:(dr.ubah[d.nik]&&dr.ubah[d.nik].nama)||d.nama,oninput:function(e){ setU('nama',e.target.value.trim()); }}):h('b',null,(dr.ubah[d.nik]&&dr.ubah[d.nik].nama)||d.nama),h('small',{class:'dim'},T[d.nik]==='L'?'Bawahan langsung':'Lewat supervisor')),
             h('td',null,ed?[h('input',{class:'input sm',value:(dr.ubah[d.nik]&&dr.ubah[d.nik].judul)||d.judul,oninput:function(e){ setU('judul',e.target.value.trim()); }}),h('input',{class:'input sm',style:'margin-top:4px',value:(dr.ubah[d.nik]&&dr.ubah[d.nik].dept)||d.dept,oninput:function(e){ setU('dept',e.target.value.trim()); }})]:[(dr.ubah[d.nik]&&dr.ubah[d.nik].judul)||d.judul,h('small',{class:'dim'},(dr.ubah[d.nik]&&dr.ubah[d.nik].dept)||d.dept)]),
             h('td',null,ed?sel_(POS_AS,(dr.ubah[d.nik]&&dr.ubah[d.nik].level)||d.level,function(v){ setU('level',v); }):((dr.ubah[d.nik]&&dr.ubah[d.nik].level)||d.level)),
-            h('td',null,kk?h('span',{class:'chip bad'},'Dikeluarkan · '+kk.alasan):selAts((dr.tambah[d.nik]&&dr.tambah[d.nik].ats)||d.ats||me,d.nik,function(v){ if(v===(d.ats||me)) delete dr.tambah[d.nik]; else dr.tambah[d.nik]={nik:d.nik,nama:d.nama,ats:v,ganti:true}; ringk(); })),
+            h('td',null,kk?h('span',{class:'chip bad'},'Dikeluarkan · '+kk.alasan):(function(){ var o=dr.tambah[d.nik]||{ats:d.ats||me}; return pickAts(o,d.nik,d.dept,false,function(){ if(o.ats===(d.ats||me)) delete dr.tambah[d.nik]; else dr.tambah[d.nik]=Object.assign(o,{nik:d.nik,nama:d.nama,ganti:true}); ringk(); }); })()),
             h('td',{style:'white-space:nowrap'},kk?h('button',{class:'btn link sm',onclick:function(){ delete dr.kurang[d.nik]; gambarT(); }},'Batal'):[h('button',{class:'btn ghost sm',onclick:function(){ d._ed=!d._ed; gambarT(); }},ic('pencil'),ed?'Selesai':'Ubah'),
               h('select',{class:'select sm','aria-label':'Keluarkan dari tim',onchange:function(e){ if(!e.target.value) return; dr.kurang[d.nik]={nik:d.nik,nama:d.nama,alasan:e.target.value}; delete dr.tambah[d.nik]; gambarT(); }},h('option',{value:''},'Keluarkan…'),['Pindah tim / atasan lain','Resign','Mutasi / promosi','Bukan tim saya'].map(function(x){ return h('option',{value:x},x); }))]));
         }):h('tr',null,h('td',{colspan:5},h('span',{class:'sub2'},'Belum ada anggota tim tercatat. Tambahkan di bawah.')))))));
       var tb=Object.keys(dr.tambah).map(function(k){ return dr.tambah[k]; }).filter(function(x){ return !x.ganti; });
-      if(tb.length||dr.baru.length) add(box,h('div',{class:'stack',style:'gap:4px'},h('b',null,'Akan ditambahkan'),tb.map(function(x){ return h('div',{class:'row',style:'gap:8px'},h('span',null,x.nama+' · '+(x.judul||'')),h('small',{class:'dim'},'atasan:'),selAts(x.ats,x.nik,function(v){ x.ats=v; }),h('button',{class:'btn link sm',onclick:function(){ delete dr.tambah[x.nik]; gambarT(); }},'Hapus')); }),
-        dr.baru.map(function(x,i){ return h('div',{class:'row',style:'gap:8px'},h('span',null,x.nama+' · '+x.judul+' (orang baru'+(x.nik?'':', tanpa NIK')+')'),h('button',{class:'btn link sm',onclick:function(){ dr.baru.splice(i,1); gambarT(); }},'Hapus')); })));
+      if(tb.length||dr.baru.length) add(box,h('div',{class:'stack addlist',id:'timAddList',style:'gap:6px'},h('b',null,'Akan ditambahkan'),panduanAts,tb.map(function(x){ return h('div',{class:'addrow'},h('span',{class:'grow'},h('b',null,x.nama),h('small',{class:'dim'},[x.judul,x.level].filter(Boolean).join(' · '))),h('small',{class:'dim'},'Atasan langsung:'),pickAts(x,x.nik,x.dept,true,ringk),h('button',{class:'btn link sm',onclick:function(){ delete dr.tambah[x.nik]; gambarT(); }},'Hapus')); }),
+        dr.baru.map(function(x,i){ return h('div',{class:'addrow'},h('span',{class:'grow'},h('b',null,x.nama),h('small',{class:'dim'},x.judul+' · '+x.level+' (orang baru'+(x.nik?'':', tanpa NIK')+')')),h('small',{class:'dim'},'Atasan langsung:'),pickAts(x,null,x.dept,true,ringk),h('button',{class:'btn link sm',onclick:function(){ dr.baru.splice(i,1); gambarT(); }},'Hapus')); })));
       add(box,h('div',{class:'stack',style:'gap:6px'},h('b',null,'Tambah anggota'),h('div',{class:'sugwrap'},cari,sug)),fBaru,ringkas); ringk(); }
-    function ringk(){ var n=nUbah(); ringkas.textContent=''; add(ringkas,h('div',{class:'row between',style:'margin-top:6px'},h('span',{class:'sub2',id:'timRingkas'},n?n+' perubahan siap dikirim.':'Belum ada perubahan.'),
-      h('div',{class:'row'},h('button',{class:'btn ghost',id:'btn-tim-ok',onclick:function(){ kirimTim(true); }},ic('check'),'Tim sudah sesuai'),(btnK.disabled=!n,btnK)))); }
-    function kirimTim(ok){ var tambah=Object.keys(dr.tambah).map(function(k){ var x=dr.tambah[k]; return {nik:x.nik,nama:x.nama,ats:x.ats}; }).concat(dr.baru.map(function(x){ return {nik:x.nik.trim(),nama:x.nama.trim(),judul:x.judul.trim(),dept:x.dept.trim(),level:x.level,doj:x.doj,ats:x.ats,baru:true}; }));
+    function ringk(){ var n=nUbah(), b=belumAts(); ringkas.textContent=''; add(ringkas,h('div',{class:'row between',style:'margin-top:6px'},b?h('span',{class:'sub2 warntxt',id:'timRingkas'},ic('info'),' Konfirmasi atasan langsung untuk '+b+' orang dulu sebelum mengirim.'):h('span',{class:'sub2',id:'timRingkas'},n?n+' perubahan siap dikirim.':'Belum ada perubahan.'),
+      h('div',{class:'row'},h('button',{class:'btn ghost',id:'btn-tim-ok',disabled:n?true:null,onclick:function(){ kirimTim(true); }},ic('check'),'Tim sudah sesuai'),(btnK.disabled=!n||!!b,btnK)))); }
+    function kirimTim(ok){ if(!ok&&belumAts()){ toast('Konfirmasi atasan langsung dulu.',true); ringk(); return; } var tambah=Object.keys(dr.tambah).map(function(k){ var x=dr.tambah[k]; return {nik:x.nik,nama:x.nama,ats:x.ats,vac:x.ats==='VAC'?x.vac:undefined}; }).concat(dr.baru.map(function(x){ return {nik:x.nik.trim(),nama:x.nama.trim(),judul:x.judul.trim(),dept:x.dept.trim(),level:x.level,doj:x.doj,ats:x.ats,vac:x.ats==='VAC'?x.vac:undefined,baru:true}; }));
       var p={id:uid('tim'),at:nowIso(),oleh:{nama:S.oleh,pid:me,nik:S.olehNik},konfirmasi:!!ok&&!nUbah(),tambah:tambah,kurang:Object.keys(dr.kurang).map(function(k){ return dr.kurang[k]; }),ubah:Object.keys(dr.ubah).map(function(k){ return dr.ubah[k]; })};
       if(!canSave()){ toast('Perubahan belum bisa dikirim dari perangkat ini. Hubungi tim TM.',true); return; }
       btnK.disabled=true; persist('tim3',p,'in/'+p.at.slice(0,7)+'/'+p.id+'_tim3.json').then(function(){ overlayTim(list,p); tutup(); anggota.forEach(function(d){ delete d._ed; }); meGambar(); gambar(); toast(p.konfirmasi?'Terima kasih, tim Anda tercatat sudah sesuai.':'Perubahan tim tersimpan dan langsung dipakai.'); })
@@ -3079,9 +3105,10 @@ var TM = (function(){
         h('div',{class:'row'},nb?h('button',{class:'btn ghost sm',onclick:function(){ save(function(X){ (X.saran||[]).forEach(function(x){ x.dibaca=true; }); },'Tandai masukan dibaca','Ditandai sudah dibaca.'); }},ic('check'),'Tandai dibaca'):null,
           L.length?h('button',{class:'btn ghost sm',onclick:function(){ unduhXlsx('Masukan_Tools_'+tgl()+'.xlsx',[{name:'Masukan',rows:[['Tanggal','Nama','Peran','Masukan']].concat(L.map(function(x){ return [fmtTgl(x.at),x.nama,x.peran,x.teks]; }))}]); }},ic('down'),'Excel'):null)),
       L.length?h('ul',{class:'loglist'},L.slice(0,8).map(function(x){ return h('li',{class:x.dibaca?'':'unread'},h('small',{class:'mono'},fmtTgl(x.at)),' ',h('b',null,x.nama||'Anonim'),h('small',{class:'dim'},' · '+x.peran),h('div',null,x.teks)); })):h('p',{class:'sub2'},'Belum ada masukan. Kolom masukan (opsional) muncul di halaman akhir setiap isian.')); }
+  function penilaiTxt(D,pid){ var q=MD.posById(D,pid), a=q&&MD.atasanOf(D,q); if(!a||MD.mgrUp(a.level)) return null; var pn=MD.penilaiOf(D,q); return h('small',{class:'dim'},' · penilai asesmen: '+(pn?(pn.holder?pn.holder.nama+' · ':'')+pn.judul+(pn.holder?'':' (Vacant)'):'belum ada Manager ke atas')); }
   function timLogCard(D){ var L=(D.timLog||[]), baru=L.filter(function(e){ return !e.dicek; });
     if(!L.length) return null;
-    var lab={tambah:'Masuk tim / ganti atasan',baru:'Orang baru',kurang:'Dikeluarkan',ubah:'Ubah detail',cocokkan:'Perlu dicocokkan TM (tanpa NIK)',gagal:'Gagal'};
+    var lab={tambah:'Masuk tim / ganti atasan',baru:'Orang baru',kurang:'Dikeluarkan',ubah:'Ubah detail',cocokkan:'Perlu dicocokkan TM (tanpa NIK)',gagal:'Gagal',vacant:'Posisi atasan VACANT dibuat'};
     return h('div',{class:'card x',id:'timLog'},h('div',{class:'row between'},h('h3',{class:'sec-h'},'Perubahan tim & data karyawan'+(baru.length?' · '+baru.length+' belum dicek':'')),
         baru.length?h('button',{class:'btn ghost sm',onclick:function(){ save(function(X){ (X.timLog||[]).forEach(function(e){ e.dicek=true; }); },'Tandai perubahan tim dicek','Semua ditandai sudah dicek.'); }},ic('check'),'Tandai semua dicek'):null),
       h('div',{class:'stack',style:'gap:8px;margin-top:8px'},L.slice(0,40).map(function(e){
@@ -3089,7 +3116,7 @@ var TM = (function(){
           h('ul',{class:'loglist'},e.ch.map(function(c){ var af=c.after||{}, bf=c.before||{};
             return h('li',null,h('b',null,lab[c.t]||c.t),': ',c.nama||'',c.pid?h('button',{class:'btn link sm',onclick:function(){ st.open=c.pid; st.otab='profil'; rer(); }},c.pid):null,
               c.t==='ubah'?' · '+Object.keys(af).map(function(k){ return k+': '+(bf[k]||'–')+' → '+af[k]; }).join('; '):'',
-              (c.t==='tambah'||c.t==='baru')&&af.atasan?' · atasan → '+atsLabel(D,{atasan:af.atasan}):'',c.ket?' · '+c.ket:''); })),
+              (c.t==='tambah'||c.t==='baru'||c.t==='vacant')&&af.atasan?' · atasan → '+atsLabel(D,{atasan:af.atasan}):'',(c.t==='tambah'||c.t==='baru')&&c.pid?penilaiTxt(D,c.pid):null,c.ket?' · '+c.ket:''); })),
           e.batal?null:h('div',{class:'row'},!e.dicek?h('button',{class:'btn soft sm',onclick:function(){ save(function(X){ var y=(X.timLog||[]).filter(function(z){ return z.id===e.id; })[0]; if(y) y.dicek=true; },'Cek perubahan tim','Ditandai sudah dicek.'); }},ic('check'),'Sudah dicek'):null,
             e.ch.length?h('button',{class:'btn ghost sm danger-t',onclick:function(){ save(function(X){ MD.revertTim(X,e.id); MD.logH(X,'Batalkan perubahan tim dari '+((e.oleh&&e.oleh.nama)||'atasan')); },'Batalkan perubahan tim','Perubahan dibatalkan.'); }},ic('x'),'Batalkan perubahan ini'):null)); }))); }
   function eksporOrg(){ var D=H(), rows=[['POS ID','Posisi','Pemegang','Departemen','Divisi','Level','ATASAN (POS ID)','Posisi atasan','Pemegang atasan','Jumlah bawahan langsung']];
