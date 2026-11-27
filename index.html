@@ -1943,7 +1943,7 @@ var MD = (function(){
       var ex=(H.pos||[]).filter(function(x){ return !x.holder&&x.atasan===me&&String(x.judul).toLowerCase()===k; })[0]; if(ex) return (vacMap[k]=ex.id);
       var md=posById(H,me), np=createPos(H,{judul:j,dept:dept||(md&&md.dept)||'Lainnya',level:lv}); try{ if(me) setAtasan(H,np.id,me); }catch(e){}
       E.ch.push({t:'vacant',nama:np.judul,pid:np.id,after:{atasan:me,judul:np.judul,level:np.level}}); return (vacMap[k]=np.id); }
-    (p.tambah||[]).forEach(function(t){ var per=t.nik?H.people[String(t.nik).trim()]:null, q=per&&per.pos?posById(H,per.pos):null, ats=t.ats==='VAC'?atsVac(t,(q&&q.dept)||t.dept):t.ats&&posById(H,t.ats)?t.ats:me;
+    (p.tambah||[]).forEach(function(t){ var per=t.nik?H.people[String(t.nik).trim()]:null, q=per&&per.pos?posById(H,per.pos):null, ta=String(t.ats||''), pr0=ta.indexOf('nik:')===0?H.people[ta.slice(4)]:null, ats=ta==='VAC'?atsVac(t,(q&&q.dept)||t.dept):pr0&&pr0.pos?pr0.pos:ta&&posById(H,ta)?ta:me;
       if(q){ var b=snap(q); try{ setAtasan(H,q.id,ats); E.ch.push({t:'tambah',nik:per.nik,nama:per.nama,pid:q.id,before:b,after:{atasan:ats}}); }catch(e){ E.ch.push({t:'gagal',nama:t.nama,ket:e.message}); } return; }
       if(t.nik&&String(t.nik).trim()){ var np=createPos(H,{judul:t.judul||'Posisi baru',dept:t.dept||'Lainnya',level:POS.indexOf(t.level)>=0?t.level:null}); np.levelCek=POS.indexOf(t.level)<0;
         var pr=ensurePerson(H,{nik:String(t.nik).trim(),nama:t.nama}); if(t.doj&&!pr.doj) pr.doj=t.doj; assign(H,np.id,pr,t.doj||''); try{ setAtasan(H,np.id,ats); }catch(e){}
@@ -2423,12 +2423,16 @@ VIEWS.mpick=function(){ var multi={}, multiBar=h('div',{class:'multibar',id:'mul
   if(!S.oleh&&ST.ss('th_me')){ try{ var M=JSON.parse(ST.ss('th_me')); S.oleh=M.n; S.olehPid=M.p; S.olehNik=M.k; me.value=M.n; }catch(e){} }
   me.addEventListener('input',function(){ if(MD.nrm(me.value)!==MD.nrm(S.oleh||'')){ S.oleh=me.value; S.olehPid=''; S.olehNik=''; saveS(); meBox.textContent=''; gambar(); } meCari(); });
   function overlayTim(L,p){ var me=p.oleh&&p.oleh.pid, me2=(L.filter(function(x){ return x.pid===me; })[0])||{}, pn=MD.mgrUp(me2.level)?me:(me2.pn||me);
-    (p.tambah||[]).forEach(function(t){ var d=t.nik&&L.filter(function(x){ return x.nik===t.nik; })[0]; if(d){ d.ats=t.ats&&t.ats!=='VAC'?t.ats:me; d.pn=pn; return; } if(t.nik) L.push({pid:null,nik:t.nik,nama:t.nama,judul:t.judul||'',dept:t.dept||'',level:t.level||'Staff',entitas:'asiatop',segmen:'',doj:t.doj||'',ats:t.ats&&t.ats!=='VAC'?t.ats:me,pn:pn,as:null}); });
+    function atsR(a){ if(a&&a.indexOf('nik:')===0){ var z=L.filter(function(x){ return x.nik===a.slice(4); })[0]; return z&&z.pid?z.pid:me; } return a&&a!=='VAC'?a:me; }
+    (p.tambah||[]).forEach(function(t){ var d=t.nik&&L.filter(function(x){ return x.nik===t.nik; })[0]; if(d){ d.ats=atsR(t.ats); d.pn=pn; return; } if(t.nik) L.push({pid:null,nik:t.nik,nama:t.nama,judul:t.judul||'',dept:t.dept||'',level:t.level||'Staff',entitas:'asiatop',segmen:'',doj:t.doj||'',ats:atsR(t.ats),pn:pn,as:null}); });
     (p.kurang||[]).forEach(function(t){ var d=L.filter(function(x){ return x.nik===t.nik; })[0]; if(d){ d.ats=''; d.pn=null; } });
     (p.ubah||[]).forEach(function(t){ var d=L.filter(function(x){ return x.nik===t.nik; })[0]; if(d) ['nama','judul','dept','level'].forEach(function(k){ if(t[k]) d[k]=t[k]; }); }); }
   function cekTim(){ var T=timKu(), me=S.olehPid, dr={tambah:{},kurang:{},ubah:{},baru:[]}, box=h('div',{class:'stack'}), tutup;
     var anggota=list.filter(function(d){ return T[d.nik]; }).sort(function(a,b){ return (T[a.nik]==='L'?0:1)-(T[b.nik]==='L'?0:1)||a.nama.localeCompare(b.nama); });
     function opsiAtasan(kecuali,wajib){ var spv=anggota.filter(function(d){ return d.nik!==kecuali&&d.pid&&posIdx(d.level)>=1&&!dr.kurang[d.nik]; }).map(function(d){ return {v:d.pid,l:d.nama+' · '+d.judul+' ('+d.level+')'}; });
+      /* anggota yang baru ditambahkan (belum terkirim) juga bisa jadi atasan langsung, mis. Supervisor + Staff-nya ditambahkan bersamaan */
+      Object.keys(dr.tambah).forEach(function(k){ var x=dr.tambah[k]; if(x.ganti||x.nik===kecuali||posIdx(x.level)<1) return; var d=list.filter(function(z){ return z.nik===x.nik; })[0]; spv.push({v:d&&d.pid?d.pid:'nik:'+x.nik,l:x.nama+' · '+(x.judul||'')+' ('+x.level+') · baru ditambahkan'}); });
+      dr.baru.forEach(function(x){ if(!x.nik||x.nik===kecuali||posIdx(x.level)<1) return; spv.push({v:'nik:'+String(x.nik).trim(),l:x.nama+' · '+x.judul+' ('+x.level+') · orang baru'}); });
       return (wajib?[{v:'',l:'— Pilih atasan langsungnya —'}]:[]).concat([{v:me,l:wajib?'Langsung ke saya ('+S.oleh+')':'Langsung ke saya'}]).concat(spv).concat([{v:'VAC',l:'Atasan langsungnya VACANT (posisi kosong)'}]); }
     /* o = {ats, vac:{judul,level}}; atasan langsung wajib dikonfirmasi (struktur saja; penilai asesmen tetap Manager ke atas) */
     function pickAts(o,kecuali,dept,wajib,cb){ var w=h('span',{class:'atspick'});
@@ -2438,6 +2442,8 @@ VIEWS.mpick=function(){ var multi={}, multiBar=h('div',{class:'multibar',id:'mul
       g(); return w; }
     function selAts(val,kecuali,cb){ var o={ats:val}; return pickAts(o,kecuali,'',false,function(){ cb(o.ats,o); }); }
     function lvVac(){ var md=list.filter(function(x){ return x.pid===me; })[0], L=POS_AS.slice(1,Math.max(2,posIdx((md&&md.level)||'Manager'))); return L.length?L:['Supervisor']; }
+    function atsSah(x,kec){ if(!x.ats||x.ats==='VAC') return true; return opsiAtasan(kec,true).some(function(o){ return o.v===x.ats; }); }
+    function bersihAts(){ Object.keys(dr.tambah).forEach(function(k){ var x=dr.tambah[k]; if(!x.ganti&&!atsSah(x,x.nik)) x.ats=''; }); dr.baru.forEach(function(x){ if(!atsSah(x,x.nik||null)) x.ats=''; }); }
     function belumAts(){ var n=0; Object.keys(dr.tambah).forEach(function(k){ var x=dr.tambah[k]; if(!x.ats||(x.ats==='VAC'&&!String((x.vac||{}).judul||'').trim())) n++; }); dr.baru.forEach(function(x){ if(!x.ats||(x.ats==='VAC'&&!String((x.vac||{}).judul||'').trim())) n++; }); return n; }
     var panduanAts=h('div',{class:'atsguide'},ic('info'),h('div',null,h('b',null,'Wajib: konfirmasi atasan langsung setiap orang yang ditambahkan.'),h('ul',null,
       h('li',null,'Staff di bawah Supervisor → pilih nama Supervisor-nya.'),h('li',null,'Posisi Supervisor-nya sedang kosong → pilih ',h('b',null,'VACANT'),' dan tulis nama jabatannya.'),h('li',null,'Memang langsung di bawah Anda → pilih ',h('b',null,'Langsung ke saya'),'.')),
@@ -2452,7 +2458,7 @@ VIEWS.mpick=function(){ var multi={}, multiBar=h('div',{class:'multibar',id:'mul
       h('div',{class:'grid3',style:'margin-top:10px'},fld('Nama lengkap','nama'),fld('NIK (bila ada)','nik'),fld('Posisi / jabatan','judul'),fld('Departemen','dept'),h('div',{class:'field'},h('label',null,'Level'),sel_(POS_AS,nb.level,function(v){ nb.level=v; })),fld('Tanggal bergabung','doj','','date')),
       h('div',{class:'row',style:'margin-top:8px'},h('div',{class:'field'},h('label',null,'Atasan langsung (wajib)'),pickAts(nb,null,'',true)),h('button',{class:'btn soft',id:'btn-tim-baru',style:'align-self:flex-end',onclick:function(){ if(!nb.nama.trim()||!nb.judul.trim()){ toast('Isi nama dan posisi.',true); return; } if(!nb.ats||(nb.ats==='VAC'&&!String((nb.vac||{}).judul||'').trim())){ toast('Pilih atasan langsungnya dulu (Supervisor, VACANT, atau langsung ke Anda).',true); return; } dr.baru.push(JSON.parse(JSON.stringify(nb))); toast('Ditambahkan ke daftar perubahan.'); gambarT(); }},ic('plus'),'Tambahkan')));
     var ringkas=h('div',null), btnK=h('button',{class:'btn primary',id:'btn-tim-kirim'},'Kirim perubahan tim',ic('right'));
-    function gambarT(){ box.textContent='';
+    function gambarT(){ bersihAts(); box.textContent='';
       add(box,h('p',{class:'sub2'},'Cek apakah daftar ini sudah sesuai. Ubah atasan langsung, perbaiki nama/posisi/level, keluarkan yang bukan tim Anda, atau tambahkan anggota. Perubahan langsung dipakai di daftar Anda dan dicatat untuk tim TM.'));
       add(box,h('div',{class:'tblwrap',style:'max-height:46vh'},h('table',{class:'tbl timtbl'},h('thead',null,h('tr',null,['Nama','Posisi','Level','Atasan langsung',''].map(function(x){ return h('th',null,x); }))),
         h('tbody',null,anggota.length?anggota.map(function(d){ var u=dr.ubah[d.nik]=dr.ubah[d.nik]||null, kk=dr.kurang[d.nik], ed=d._ed;
@@ -2472,7 +2478,9 @@ VIEWS.mpick=function(){ var multi={}, multiBar=h('div',{class:'multibar',id:'mul
       add(box,h('div',{class:'stack',style:'gap:6px'},h('b',null,'Tambah anggota'),h('div',{class:'sugwrap'},cari,sug)),fBaru,ringkas); ringk(); }
     function ringk(){ var n=nUbah(), b=belumAts(); ringkas.textContent=''; add(ringkas,h('div',{class:'row between',style:'margin-top:6px'},b?h('span',{class:'sub2 warntxt',id:'timRingkas'},ic('info'),' Konfirmasi atasan langsung untuk '+b+' orang dulu sebelum mengirim.'):h('span',{class:'sub2',id:'timRingkas'},n?n+' perubahan siap dikirim.':'Belum ada perubahan.'),
       h('div',{class:'row'},h('button',{class:'btn ghost',id:'btn-tim-ok',disabled:n?true:null,onclick:function(){ kirimTim(true); }},ic('check'),'Tim sudah sesuai'),(btnK.disabled=!n||!!b,btnK)))); }
-    function kirimTim(ok){ if(!ok&&belumAts()){ toast('Konfirmasi atasan langsung dulu.',true); ringk(); return; } var tambah=Object.keys(dr.tambah).map(function(k){ var x=dr.tambah[k]; return {nik:x.nik,nama:x.nama,ats:x.ats,vac:x.ats==='VAC'?x.vac:undefined}; }).concat(dr.baru.map(function(x){ return {nik:x.nik.trim(),nama:x.nama.trim(),judul:x.judul.trim(),dept:x.dept.trim(),level:x.level,doj:x.doj,ats:x.ats,vac:x.ats==='VAC'?x.vac:undefined,baru:true}; }));
+    function kirimTim(ok){ if(!ok&&belumAts()){ toast('Konfirmasi atasan langsung dulu.',true); ringk(); return; } var tambah=Object.keys(dr.tambah).map(function(k){ var x=dr.tambah[k]; var d0=list.filter(function(z){ return z.nik===x.nik; })[0]; return {nik:x.nik,nama:x.nama,ats:x.ats,vac:x.ats==='VAC'?x.vac:undefined,pid0:d0&&d0.pid}; }).concat(dr.baru.map(function(x){ return {nik:x.nik.trim(),nama:x.nama.trim(),judul:x.judul.trim(),dept:x.dept.trim(),level:x.level,doj:x.doj,ats:x.ats,vac:x.ats==='VAC'?x.vac:undefined,baru:true}; }));
+      tambah.sort(function(a,b){ var ra=tambah.some(function(z){ return z!==a&&(a.ats===('nik:'+z.nik)||(z.pid0&&a.ats===z.pid0)); })?1:0, rb=tambah.some(function(z){ return z!==b&&(b.ats===('nik:'+z.nik)||(z.pid0&&b.ats===z.pid0)); })?1:0; return ra-rb; });
+      tambah.forEach(function(t){ delete t.pid0; });
       var p={id:uid('tim'),at:nowIso(),oleh:{nama:S.oleh,pid:me,nik:S.olehNik},konfirmasi:!!ok&&!nUbah(),tambah:tambah,kurang:Object.keys(dr.kurang).map(function(k){ return dr.kurang[k]; }),ubah:Object.keys(dr.ubah).map(function(k){ return dr.ubah[k]; })};
       if(!canSave()){ toast('Perubahan belum bisa dikirim dari perangkat ini. Hubungi tim TM.',true); return; }
       btnK.disabled=true; persist('tim3',p,'in/'+p.at.slice(0,7)+'/'+p.id+'_tim3.json').then(function(){ overlayTim(list,p); tutup(); anggota.forEach(function(d){ delete d._ed; }); meGambar(); gambar(); toast(p.konfirmasi?'Terima kasih, tim Anda tercatat sudah sesuai.':'Perubahan tim tersimpan dan langsung dipakai.'); })
@@ -3610,7 +3618,8 @@ function turTM(){ tur([
 /* ===== Adaptor Competency Hub (TNA di dalam hub) ===== */
 var HUBCFG={tenggat:'',kontak:''};
 function overlayTimH(L,p){ var me=p.oleh&&p.oleh.pid, me2=(L.filter(function(x){ return x.pid===me; })[0])||{}, pn=MD.mgrUp(me2.level)?me:(me2.pn||me);
-  (p.tambah||[]).forEach(function(t){ var d=t.nik&&L.filter(function(x){ return x.nik===t.nik; })[0]; if(d){ d.ats=t.ats&&t.ats!=='VAC'?t.ats:me; d.pn=pn; return; } if(t.nik) L.push({pid:null,nik:t.nik,nama:t.nama,judul:t.judul||'',dept:t.dept||'',level:t.level||'Staff',entitas:'asiatop',segmen:'',doj:t.doj||'',ats:t.ats&&t.ats!=='VAC'?t.ats:me,pn:pn,as:null}); });
+  function atsR(a){ if(a&&a.indexOf('nik:')===0){ var z=L.filter(function(x){ return x.nik===a.slice(4); })[0]; return z&&z.pid?z.pid:me; } return a&&a!=='VAC'?a:me; }
+  (p.tambah||[]).forEach(function(t){ var d=t.nik&&L.filter(function(x){ return x.nik===t.nik; })[0]; if(d){ d.ats=atsR(t.ats); d.pn=pn; return; } if(t.nik) L.push({pid:null,nik:t.nik,nama:t.nama,judul:t.judul||'',dept:t.dept||'',level:t.level||'Staff',entitas:'asiatop',segmen:'',doj:t.doj||'',ats:atsR(t.ats),pn:pn,as:null}); });
   (p.kurang||[]).forEach(function(t){ var d=L.filter(function(x){ return x.nik===t.nik; })[0]; if(d){ d.ats=''; d.pn=null; } });
   (p.ubah||[]).forEach(function(t){ var d=L.filter(function(x){ return x.nik===t.nik; })[0]; if(d) ['nama','judul','dept','level'].forEach(function(k){ if(t[k]) d[k]=t[k]; }); }); }
 function muatHub(){ if(ST.resetDir) ST.resetDir(); return ST.loadCfg().then(function(){ return Promise.all([ST.loadDir(),ST.readInbox().catch(function(){ return []; })]); }).then(function(r){ var L=(r[0]||[]).map(function(x){ return JSON.parse(JSON.stringify(x)); });
